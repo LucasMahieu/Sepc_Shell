@@ -26,15 +26,23 @@
 
 int executer(char *line)
 {
+    struct cmdline *cmd = 0;
+    cmd = parsecmd(&line);
+    if(cmd == 0) return -1;
+
+        printf("in : %s, out %s, bg %d , seq %s",cmd->in,cmd->out,cmd->bg,**(cmd->seq) );
+    
+
+
 	/* Insert your code to execute the command line
 	 * identically to the standard execution scheme:
 	 * parsecmd, then fork+execvp, for a single command.
 	 * pipe and i/o redirection are not required.
 	 */
-	printf("Not implemented: can not execute %s\n", line);
+//	printf("Not implemented: can not execute %s\n", line);
 
 	/* Remove this line when using parsecmd as it will free it */
-	free(line);
+	//free(line);
 	
 	return 0;
 }
@@ -57,76 +65,77 @@ void terminate(char *line) {
 	exit(0);
 }
 
-
 int main() {
-        printf("Variante %d: %s\n", VARIANTE, VARIANTE_STRING);
+    printf("Variante %d: %s\n", VARIANTE, VARIANTE_STRING);
 
 #ifdef USE_GUILE
-        scm_init_guile();
-        /* register "executer" function in scheme */
-        scm_c_define_gsubr("executer", 1, 0, 0, executer_wrapper);
+    scm_init_guile();
+    /* register "executer" function in scheme */
+    scm_c_define_gsubr("executer", 1, 0, 0, executer_wrapper);
 #endif
 
-	while (1) {
-		struct cmdline *l;
-		char *line=0;
-		int i, j;
-		char *prompt = "ensishell>";
+    while (1) {
+        struct cmdline *l;
+        char *line=0;
+        int i, j;
+        char *prompt = "ensishell>";
 
-		/* Readline use some internal memory structure that
-		   can not be cleaned at the end of the program. Thus
-		   one memory leak per command seems unavoidable yet */
-		line = readline(prompt);
-		if (line == 0 || ! strncmp(line,"exit", 4)) {
-			terminate(line);
-		}
+        /* Readline use some internal memory structure that
+         *         can not be cleaned at the end of the program. Thus
+         *                 one memory leak per command seems unavoidable yet */
+        line = readline(prompt);
+        if (line == 0 || ! strncmp(line,"exit", 4)) {
+            terminate(line);
+        }
 
 #ifdef USE_GNU_READLINE
-		add_history(line);
+        add_history(line);
 #endif
 
 
 #ifdef USE_GUILE
-		/* The line is a scheme command */
-		if (line[0] == '(') {
-			char catchligne[strlen(line) + 256];
-			sprintf(catchligne, "(catch #t (lambda () %s) (lambda (key . parameters) (display \"mauvaise expression/bug en scheme\n\")))", line);
-			scm_eval_string(scm_from_locale_string(catchligne));
-			free(line);
-                        continue;
-                }
+        /* The line is a scheme command */
+        if (line[0] == '(') {
+            char catchligne[strlen(line) + 256];
+            sprintf(catchligne, "(catch #t (lambda () %s) (lambda (key . parameters) (display \"mauvaise expression/bug en scheme\n\")))", line);
+            scm_eval_string(scm_from_locale_string(catchligne));
+            free(line);
+            continue;
+        }
 #endif
 
-		/* parsecmd free line and set it up to 0 */
-		l = parsecmd( & line);
+        /* parsecmd free line and set it up to 0 */
+        l = parsecmd( & line);
 
-		/* If input stream closed, normal termination */
-		if (!l) {
-		  
-			terminate(0);
-		}
-		
+        /* If input stream closed, normal termination */
+        if (!l) {
 
-		
-		if (l->err) {
-			/* Syntax error, read another command */
-			printf("error: %s\n", l->err);
-			continue;
-		}
+            terminate(0);
+        }
 
-		if (l->in) printf("in: %s\n", l->in);
-		if (l->out) printf("out: %s\n", l->out);
-		if (l->bg) printf("background (&)\n");
 
-		/* Display each command of the pipe */
-		for (i=0; l->seq[i]!=0; i++) {
-			char **cmd = l->seq[i];
-			printf("seq[%d]: ", i);
-                        for (j=0; cmd[j]!=0; j++) {
-                                printf("'%s' ", cmd[j]);
-                        }
-			printf("\n");
-		}
-	}
+
+        if (l->err) {
+            /* Syntax error, read another command */
+            printf("error: %s\n", l->err);
+            continue;
+        }
+
+        if (l->in) printf("in: %s\n", l->in);
+        if (l->out) printf("out: %s\n", l->out);
+        if (l->bg) printf("background (&)\n");
+
+        /* Display each command of the pipe */
+        for (i=0; l->seq[i]!=0; i++) {
+            char **cmd = l->seq[i];
+            printf("seq[%d]: ", i);
+            for (j=0; cmd[j]!=0; j++) {
+                printf("'%s' ", cmd[j]);
+            }
+            printf("\n");
+        }
+    }
 
 }
+
+

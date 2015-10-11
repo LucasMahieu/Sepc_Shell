@@ -71,7 +71,8 @@ char *readline(char *prompt)
 #define READ_CHAR *(*cur_buf)++ = *(*cur)++
 #define SKIP_CHAR (*cur)++
 
-static void read_single_quote(char ** cur, char ** cur_buf) {
+static void read_single_quote(char ** cur, char ** cur_buf) 
+{
 	SKIP_CHAR;
 	while(1) {
 		char c = **cur;
@@ -89,7 +90,8 @@ static void read_single_quote(char ** cur, char ** cur_buf) {
 	}
 }
 
-static void read_double_quote(char ** cur, char ** cur_buf) {
+static void read_double_quote(char ** cur, char ** cur_buf) 
+{
 	SKIP_CHAR;
 	while(1) {
 		char c = **cur;
@@ -111,7 +113,8 @@ static void read_double_quote(char ** cur, char ** cur_buf) {
 	}
 }
 
-static void read_word(char ** cur, char ** cur_buf) {
+static void read_word(char ** cur, char ** cur_buf) 
+{
 	while(1) {
 		char c = **cur;
 		switch (c) {

@@ -1,0 +1,38 @@
+ TP SHELL
+
+Shell = programme qui tourne et qui interprète les cmd tapées
+Foreground or Background 
+
+
+Entrées / Sorties = '<' ou '>' ou |
+
+principale cmd : fork , wait ...  -> utiliser man
+
+
+processus = programme donc on a besoin de plein de choses : 
+    - PC
+    - État courant 
+    - Mémoire : RAM + Registres
+    - I/O
+
+
+FORK: fork()
+Duplique un programme : copie TOUT ! 
+Seul différence : un fils et un parent -> donc n° d'identification différente 
+PIDfils et PIDpere
+
+Après l'appel d'un fork, le fils et le père vont executer exactement le même code.
+
+On va préférer un père avec plusieurs fils 
+
+
+EXECVP, EXECVS, EXECLP, EXECLE : Recouvrement
+Le processus A devient le processus B.
+Tout l'état d'avant le EXEC est perdu, on remplace vraiment tout le programme.
+
+WAIT, WAITPID : attente de la terminaison 
+
+
+
+pour s'attacher à un processus avec GDB on peut faire 
+gdb ./exe PID
