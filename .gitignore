@@ -22,7 +22,6 @@
 
 # ignore build directory
 build/
-<<<<<<< HEAD
 
 # Tags
-tags/
+tags
