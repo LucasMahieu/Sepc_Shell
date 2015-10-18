@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "variante.h"
 #include "readcmd.h"
@@ -29,7 +31,8 @@ void terminate(char *line);
 int executer(char *line)
 {
     int i = 0, j = 0;
-    int pid;
+    int status;
+    pid_t pid;
     struct cmdline *cmd = 0;
     // Parse cmd and free line
     cmd = parsecmd(&line);
@@ -64,6 +67,7 @@ int executer(char *line)
     switch(pid = fork())
     {
         case 0:
+            // Le fils execute ce code
             if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1)
             {
                 return -1;
@@ -74,6 +78,8 @@ int executer(char *line)
             return -1;
             break;
         default:
+            waitpid(pid, &status, 0);
+            // Le père execute ce code
             break;
     }
 
