@@ -162,7 +162,7 @@ static char **split_in_words(char *line)
 			cur++;
 			break;
 		case '&':
-		        w = "&";
+            w = "&";
 			cur++;
 			break;
 		case '<':

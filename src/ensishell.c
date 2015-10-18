@@ -8,13 +8,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <errno.h>
 
 #include "variante.h"
 #include "readcmd.h"
+#include "jobs.h"
+void terminate(char *line);
+
 
 
 #ifndef VARIANTE
@@ -30,104 +33,132 @@
 #if USE_GUILE == 1
 #include <libguile.h>
 
+void add_jobs(pid_t pidj, char ** seql)
+{
+    jobs * toAdd = NULL;
+    toAdd = malloc(sizeof(*toAdd));
+    
+    toAdd->pid_number = pidj;
+    toAdd->jseq = seql;
+
+    if (jlist == NULL)
+    {
+        jlist = toAdd;
+        toAdd->next = NULL;
+    }
+    else
+    {
+        toAdd->next = jlist->next;
+        jlist = toAdd;
+    }
+}
+
+void print_jobs()
+{
+    int i = 0;
+    //int status = 0;
+    jobs * tmp = NULL;
+    for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
+    {
+        char ** cmds = tmp->jseq;
+        printf("pid : %d | command was :\" ", tmp->pid_number);
+        for(i = 0; cmds[i] != 0; i++)
+        {
+            printf("%s", cmds[i]);
+        }
+        printf("\n");
+    }
+}
+
 int executer(char *line)
 {
-    struct cmdline *cmdl;
-    int status; 
-    pid_t pid = 0;
-    int ret=0;
-    char path[50];
+    int i = 0, j = 0;
+    int status;
+    pid_t pid;
+    struct cmdline *cmd = 0;
+    // Parse cmd and free line
+    cmd = parsecmd(&line);
 
-    cmdl = parsecmd(&line);
-//    if (!cmdl) terminate(0);
-
-    if (cmdl->err) {
-        /* Syntax error, read another command */
-        printf("error: %s\n", cmdl->err);
-        return -1;
+    // If input stream is closed
+    if (!cmd)
+    {
+        terminate(0);
     }
 
-    switch(pid=fork()){
-        case -1:
-            perror("fork failed:");
-            break;
+    if (cmd->err) {
+        /* Syntax error, read another command */
+        printf("error: %s\n", cmd->err);
+        return 0;
+    }
+
+    if (cmd->in) printf("in: %s\n", cmd->in);
+    if (cmd->out) printf("out: %s\n", cmd->out);
+    if (cmd->bg) printf("background (&)\n");
+
+    /* Display each command of the pipe */
+    for (i=0; cmd->seq[i]!=0; i++) {
+        char **cmds = cmd->seq[i];
+        printf("seq[%d]: ", i);
+        for (j=0; cmds[j]!=0; j++) {
+            printf("'%s' ", cmds[j]);
+        }
+        printf("\n");
+    }
+>>>>>>> 2519794599ad83cf6a7f3c466cb2ea9f079b8a0d
+
+    if (!strcmp(cmd->seq[0][0],"jobs"))
+    {
+        print_jobs();
+        return 0;
+    }
+
+    // On fork pour créer un nouveau processus.
+    switch(pid = fork())
+    {
         case 0:
-            printf("Je suis le fils qui va faire la cmd\n");
-            strcpy(path,"/bin/");
-            strcat(path,*cmdl->seq[0]);
-            ret = execvp(path,cmdl->seq[0]);
-            if (ret == -1) perror("ls failed:");
+            // Le fils execute ce code
+            if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1)
+            {
+                return -1;
+            }
+            break;
+        // En cas d'erreur, on retourne -1.
+        case -1:
+            return -1;
             break;
         default:
-            printf("Je suis le père et j'attends que mon fils finisse\n");
-            waitpid(pid,&status,0);
+            // Le père execute ce code
+            // Si & a été écrit, le shell s'affiche directement
+            if (cmd->bg) 
+            {
+                add_jobs(pid, cmd->seq[0]);
+            }
+            else
+            {
+                waitpid(pid, &status, 0);
+            }
             break;
     }
-return 0;
-}
- /*   int i=0;
-    char *cmd[50];
-    for(i=0;line[i]!=0;i++){
-        strcpy(cmd[i],line[i]);
-    }
-    cmd[i]=NULL;
-    pid_t pid=0;
-//    if(strcmp("ls",cmd)==0){
-       int status; 
-        switch(pid=fork()){
-            case -1:
-                perror("fork failed:");
-            break;
-            case 0:
-                printf("Je suis le fils qui va faire la cmd\n");
-                char path[]="/bin/";
-                strcat(cmd[0],path);
-                int ret = execvp(cmd[0],cmd);
-                if (ret == -1) perror("ls failed:");
-            break;
-            default:
-                printf("Je suis le père et j'attends que mon fils finisse\n");
-                waitpid(pid,&status,0);
-            break;
-        }
+
     return 0;
-//    }
-//    else return 0; 
-    
-
-
-    
-
-
-	// * Insert your code to execute the command line
-	 * identically to the standard execution scheme:
-	 * parsecmd, then fork+execvp, for a single command.
-	 * pipe and i/o redirection are not required.
-	 */
-//	printf("Not implemented: can not execute %s\n", line);
-
-	/* Remove this line when using parsecmd as it will free it */
-	//free(line);
-	
-//	return 0;
-//}
+}
 
 SCM executer_wrapper(SCM x)
 {
-    return scm_from_int(executer(scm_to_locale_stringn(x,0)));
+    return scm_from_int(executer(scm_to_locale_stringn(x, 0)));
 }
 #endif
 
 
 void terminate(char *line) {
 #ifdef USE_GNU_READLINE
-	/* rl_clear_history() does not exist yet in centOS 6 */
-	clear_history();
+    /* rl_clear_history() does not exist yet in centOS 6 */
+    clear_history();
 #endif
-	if (line)
-	  free(line);
-	printf("exit\n");
-	exit(0);
+    if (line)
+        free(line);
+    printf("exit\n");
+    exit(0);
 }
 
 int main() {
@@ -166,7 +197,18 @@ int main() {
             continue;
         }
 #endif
-        executer(line);
+        switch (executer(line))
+        {
+            case 0:
+                continue;
+                break;
+            case -1:
+                perror("error: ");
+                break;
+            default:
+                break;
+        }
+        
     }
 
 }
