@@ -7,15 +7,17 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <string.h>
-#include <sys/types.h>
+#include <unistd.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <errno.h>
 
 #include "variante.h"
 #include "readcmd.h"
 #include "jobs.h"
 void terminate(char *line);
+
 
 
 #ifndef VARIANTE
@@ -136,7 +138,6 @@ int executer(char *line)
 
     free(cpyLine);
 
-
     return 0;
 }
 
@@ -193,7 +194,6 @@ int main() {
             continue;
         }
 #endif
-
         switch (executer(line))
         {
             case 0:
