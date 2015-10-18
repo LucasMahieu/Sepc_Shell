@@ -7,9 +7,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include "variante.h"
 #include "readcmd.h"
+void terminate(char *line);
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -26,43 +28,75 @@
 
 int executer(char *line)
 {
+    int i = 0, j = 0;
+    int pid;
     struct cmdline *cmd = 0;
+    // Parse cmd and free line
     cmd = parsecmd(&line);
-    if(cmd == 0) return -1;
 
-        printf("in : %s, out %s, bg %d , seq %s",cmd->in,cmd->out,cmd->bg,**(cmd->seq) );
-    
+    // If input stream is closed
+    if (!cmd)
+    {
+        terminate(0);
+    }
+
+    if (cmd->err) {
+        /* Syntax error, read another command */
+        printf("error: %s\n", cmd->err);
+        return 0;
+    }
+
+    if (cmd->in) printf("in: %s\n", cmd->in);
+    if (cmd->out) printf("out: %s\n", cmd->out);
+    if (cmd->bg) printf("background (&)\n");
+
+    /* Display each command of the pipe */
+    for (i=0; cmd->seq[i]!=0; i++) {
+        char **cmds = cmd->seq[i];
+        printf("seq[%d]: ", i);
+        for (j=0; cmds[j]!=0; j++) {
+            printf("'%s' ", cmds[j]);
+        }
+        printf("\n");
+    }
+
+    // On fork pour créer un nouveau processus.
+    switch(pid = fork())
+    {
+        case 0:
+            if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1)
+            {
+                return -1;
+            }
+            break;
+        // En cas d'erreur, on retourne -1.
+        case -1:
+            return -1;
+            break;
+        default:
+            break;
+    }
 
 
-	/* Insert your code to execute the command line
-	 * identically to the standard execution scheme:
-	 * parsecmd, then fork+execvp, for a single command.
-	 * pipe and i/o redirection are not required.
-	 */
-//	printf("Not implemented: can not execute %s\n", line);
-
-	/* Remove this line when using parsecmd as it will free it */
-	//free(line);
-	
-	return 0;
+    return 0;
 }
 
 SCM executer_wrapper(SCM x)
 {
-        return scm_from_int(executer(scm_to_locale_stringn(x, 0)));
+    return scm_from_int(executer(scm_to_locale_stringn(x, 0)));
 }
 #endif
 
 
 void terminate(char *line) {
 #ifdef USE_GNU_READLINE
-	/* rl_clear_history() does not exist yet in centOS 6 */
-	clear_history();
+    /* rl_clear_history() does not exist yet in centOS 6 */
+    clear_history();
 #endif
-	if (line)
-	  free(line);
-	printf("exit\n");
-	exit(0);
+    if (line)
+        free(line);
+    printf("exit\n");
+    exit(0);
 }
 
 int main() {
@@ -75,9 +109,7 @@ int main() {
 #endif
 
     while (1) {
-        struct cmdline *l;
         char *line=0;
-        int i, j;
         char *prompt = "ensishell>";
 
         /* Readline use some internal memory structure that
@@ -104,36 +136,18 @@ int main() {
         }
 #endif
 
-        /* parsecmd free line and set it up to 0 */
-        l = parsecmd( & line);
-
-        /* If input stream closed, normal termination */
-        if (!l) {
-
-            terminate(0);
+        switch (executer(line))
+        {
+            case 0:
+                continue;
+                break;
+            case -1:
+                perror("error: ");
+                break;
+            default:
+                break;
         }
-
-
-
-        if (l->err) {
-            /* Syntax error, read another command */
-            printf("error: %s\n", l->err);
-            continue;
-        }
-
-        if (l->in) printf("in: %s\n", l->in);
-        if (l->out) printf("out: %s\n", l->out);
-        if (l->bg) printf("background (&)\n");
-
-        /* Display each command of the pipe */
-        for (i=0; l->seq[i]!=0; i++) {
-            char **cmd = l->seq[i];
-            printf("seq[%d]: ", i);
-            for (j=0; cmd[j]!=0; j++) {
-                printf("'%s' ", cmd[j]);
-            }
-            printf("\n");
-        }
+        
     }
 
 }
