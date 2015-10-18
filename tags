@@ -281,7 +281,7 @@ VARIANTE_STRING	src/variante.h	29;"	d
 VARIANTE_STRING	src/variante.h	31;"	d
 VARIANTE_STRING	src/variante.h	33;"	d
 __READCMD_H	src/readcmd.h	13;"	d
-bg	src/readcmd.h	/^        int   bg;       \/* If set the command must run in background *\/ $/;"	m	struct:cmdline
+bg	src/readcmd.h	/^    int   bg;       \/* If set the command must run in background *\/ $/;"	m	struct:cmdline
 cmdline	src/readcmd.h	/^struct cmdline {$/;"	s
 err	src/readcmd.h	/^	char *err;	\/* If not null, it is an error message that should be$/;"	m	struct:cmdline
 executer	src/ensishell.c	/^int executer(char *line)$/;"	f

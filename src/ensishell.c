@@ -7,9 +7,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 
 #include "variante.h"
 #include "readcmd.h"
+
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -26,15 +32,74 @@
 
 int executer(char *line)
 {
-    struct cmdline *cmd = 0;
-    cmd = parsecmd(&line);
-    if(cmd == 0) return -1;
+    struct cmdline *cmdl;
+    int status; 
+    pid_t pid = 0;
+    int ret=0;
+    char path[50];
 
-        printf("in : %s, out %s, bg %d , seq %s",cmd->in,cmd->out,cmd->bg,**(cmd->seq) );
+    cmdl = parsecmd(&line);
+//    if (!cmdl) terminate(0);
+
+    if (cmdl->err) {
+        /* Syntax error, read another command */
+        printf("error: %s\n", cmdl->err);
+        return -1;
+    }
+
+    switch(pid=fork()){
+        case -1:
+            perror("fork failed:");
+            break;
+        case 0:
+            printf("Je suis le fils qui va faire la cmd\n");
+            strcpy(path,"/bin/");
+            strcat(path,*cmdl->seq[0]);
+            ret = execvp(path,cmdl->seq[0]);
+            if (ret == -1) perror("ls failed:");
+            break;
+        default:
+            printf("Je suis le père et j'attends que mon fils finisse\n");
+            waitpid(pid,&status,0);
+            break;
+    }
+return 0;
+}
+ /*   int i=0;
+    char *cmd[50];
+    for(i=0;line[i]!=0;i++){
+        strcpy(cmd[i],line[i]);
+    }
+    cmd[i]=NULL;
+    pid_t pid=0;
+//    if(strcmp("ls",cmd)==0){
+       int status; 
+        switch(pid=fork()){
+            case -1:
+                perror("fork failed:");
+            break;
+            case 0:
+                printf("Je suis le fils qui va faire la cmd\n");
+                char path[]="/bin/";
+                strcat(cmd[0],path);
+                int ret = execvp(cmd[0],cmd);
+                if (ret == -1) perror("ls failed:");
+            break;
+            default:
+                printf("Je suis le père et j'attends que mon fils finisse\n");
+                waitpid(pid,&status,0);
+            break;
+        }
+    return 0;
+//    }
+//    else return 0; 
     
 
 
-	/* Insert your code to execute the command line
+    
+
+
+	// * Insert your code to execute the command line
 	 * identically to the standard execution scheme:
 	 * parsecmd, then fork+execvp, for a single command.
 	 * pipe and i/o redirection are not required.
@@ -44,12 +109,12 @@ int executer(char *line)
 	/* Remove this line when using parsecmd as it will free it */
 	//free(line);
 	
-	return 0;
-}
+//	return 0;
+//}
 
 SCM executer_wrapper(SCM x)
 {
-        return scm_from_int(executer(scm_to_locale_stringn(x, 0)));
+    return scm_from_int(executer(scm_to_locale_stringn(x,0)));
 }
 #endif
 
@@ -75,9 +140,7 @@ int main() {
 #endif
 
     while (1) {
-        struct cmdline *l;
         char *line=0;
-        int i, j;
         char *prompt = "ensishell>";
 
         /* Readline use some internal memory structure that
@@ -103,37 +166,7 @@ int main() {
             continue;
         }
 #endif
-
-        /* parsecmd free line and set it up to 0 */
-        l = parsecmd( & line);
-
-        /* If input stream closed, normal termination */
-        if (!l) {
-
-            terminate(0);
-        }
-
-
-
-        if (l->err) {
-            /* Syntax error, read another command */
-            printf("error: %s\n", l->err);
-            continue;
-        }
-
-        if (l->in) printf("in: %s\n", l->in);
-        if (l->out) printf("out: %s\n", l->out);
-        if (l->bg) printf("background (&)\n");
-
-        /* Display each command of the pipe */
-        for (i=0; l->seq[i]!=0; i++) {
-            char **cmd = l->seq[i];
-            printf("seq[%d]: ", i);
-            for (j=0; cmd[j]!=0; j++) {
-                printf("'%s' ", cmd[j]);
-            }
-            printf("\n");
-        }
+        executer(line);
     }
 
 }
