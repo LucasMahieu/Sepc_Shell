@@ -31,13 +31,14 @@ void terminate(char *line);
 #if USE_GUILE == 1
 #include <libguile.h>
 
-void add_jobs(pid_t pidj, char *** seql)
+void add_jobs(pid_t pidj, char * seql)
 {
     jobs * toAdd = NULL;
     toAdd = malloc(sizeof(*toAdd));
     
     toAdd->pid_number = pidj;
-    toAdd->jseq = seql;
+    toAdd->jseq = malloc(sizeof(char) * (strlen(seql) + 1));
+    strcpy(toAdd->jseq,seql);
 
     if (jlist == NULL)
     {
@@ -59,11 +60,7 @@ void print_jobs()
     for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
     {
         char ** cmds = tmp->jseq;
-        printf("pid : %d | command was : ", tmp->pid_number);
-        for(i = 0; cmds[i] != 0; i++)
-        {
-            printf("%s", cmds[i]);
-        }
+        printf("pid : %d | command was : %s", tmp->pid_number, tmp->jseq);
         printf("\n");
     }
 }
