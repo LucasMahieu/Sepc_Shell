@@ -18,6 +18,7 @@
 
 # emacs backup
 *~
+*.swp
 
 # ignore build directory
 build/

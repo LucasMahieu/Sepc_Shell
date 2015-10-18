@@ -47,7 +47,7 @@ void add_jobs(pid_t pidj, char * seql)
     }
     else
     {
-        toAdd->next = jlist->next;
+        toAdd->next = jlist;
         jlist = toAdd;
     }
 }
