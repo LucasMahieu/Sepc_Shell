@@ -8,12 +8,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
 #include "variante.h"
 #include "readcmd.h"
+#include "jobs.h"
 void terminate(char *line);
+
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -27,6 +30,43 @@ void terminate(char *line);
 
 #if USE_GUILE == 1
 #include <libguile.h>
+
+void add_jobs(pid_t pidj, char ** seql)
+{
+    jobs * toAdd = NULL;
+    toAdd = malloc(sizeof(*toAdd));
+    
+    toAdd->pid_number = pidj;
+    toAdd->jseq = seql;
+
+    if (jlist == NULL)
+    {
+        jlist = toAdd;
+        toAdd->next = NULL;
+    }
+    else
+    {
+        toAdd->next = jlist->next;
+        jlist = toAdd;
+    }
+}
+
+void print_jobs()
+{
+    int i = 0;
+    //int status = 0;
+    jobs * tmp = NULL;
+    for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
+    {
+        char ** cmds = tmp->jseq;
+        printf("pid : %d | command was :\" ", tmp->pid_number);
+        for(i = 0; cmds[i] != 0; i++)
+        {
+            printf("%s", cmds[i]);
+        }
+        printf("\n");
+    }
+}
 
 int executer(char *line)
 {
@@ -63,6 +103,12 @@ int executer(char *line)
         printf("\n");
     }
 
+    if (!strcmp(cmd->seq[0][0],"jobs"))
+    {
+        print_jobs();
+        return 0;
+    }
+
     // On fork pour créer un nouveau processus.
     switch(pid = fork())
     {
@@ -78,12 +124,16 @@ int executer(char *line)
             return -1;
             break;
         default:
+            // Le père execute ce code
             // Si & a été écrit, le shell s'affiche directement
-            if (!cmd->bg) 
+            if (cmd->bg) 
+            {
+                add_jobs(pid, cmd->seq[0]);
+            }
+            else
             {
                 waitpid(pid, &status, 0);
             }
-            // Le père execute ce code
             break;
     }
 
