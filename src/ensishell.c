@@ -54,12 +54,10 @@ void add_jobs(pid_t pidj, char * seql)
 
 void print_jobs()
 {
-    int i = 0;
     //int status = 0;
     jobs * tmp = NULL;
     for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
     {
-        char ** cmds = tmp->jseq;
         printf("pid : %d | command was : %s", tmp->pid_number, tmp->jseq);
         printf("\n");
     }
@@ -70,6 +68,8 @@ int executer(char *line)
     int i = 0, j = 0;
     int status;
     pid_t pid;
+    char * cpyLine = malloc(sizeof(char) * (strlen(line) + 1));
+    strcpy(cpyLine, line);
     struct cmdline *cmd = 0;
     // Parse cmd and free line
     cmd = parsecmd(&line);
@@ -125,7 +125,7 @@ int executer(char *line)
             // Si & a été écrit, le shell s'affiche directement
             if (cmd->bg) 
             {
-                add_jobs(pid, cmd->seq);
+                add_jobs(pid, cpyLine);
             }
             else
             {
@@ -133,6 +133,8 @@ int executer(char *line)
             }
             break;
     }
+
+    free(cpyLine);
 
 
     return 0;
