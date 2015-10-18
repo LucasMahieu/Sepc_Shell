@@ -3,7 +3,7 @@
 
 struct jobs
 {
-    char ***jseq;
+    char *jseq;
     pid_t pid_number;
     struct jobs * next;
 };
@@ -12,7 +12,7 @@ typedef struct jobs jobs;
 // Print jobs and free those which are terminated.
 void print_jobs();
 // Add a job to the job list.
-void add_jobs(pid_t pidj, char *** seql);
+void add_jobs(pid_t pidj, char * seql);
 // Free jobs
 void free_jobs();
 
