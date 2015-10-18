@@ -56,12 +56,54 @@ void add_jobs(pid_t pidj, char * seql)
 
 void print_jobs()
 {
-    //int status = 0;
+    int status = 1;
     jobs * tmp = NULL;
     for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
     {
-        printf("pid : %d | command was : %s", tmp->pid_number, tmp->jseq);
+        // WNOHANG so that we don't wait but only check status.
+        waitpid(tmp->pid_number, &status, WNOHANG);
+
+        printf("pid : %d | command was : %s ", tmp->pid_number, tmp->jseq);
+        //if (WIFEXITED(status))
+        if (!status)
+        {
+            printf("| processus is over.");
+            tmp->end = 1;
+        }
+        else
+        {
+            printf("| processus is active.");
+            tmp->end = 0;
+        }
         printf("\n");
+    }
+    free_jobs();
+}
+
+void free_jobs()
+{
+    jobs * tmp = NULL;
+    jobs * tmp_prev = NULL;
+    if (jlist == NULL)
+    {
+        return;
+    }
+    tmp_prev = jlist;
+    for(tmp = jlist; tmp != NULL; tmp = tmp->next)
+    {
+        if (tmp->end && tmp == jlist)
+        {
+            jlist = tmp->next;
+            free(tmp->jseq);
+            free(tmp);
+        }
+        else if (tmp->end)
+        {
+            tmp_prev->next = tmp->next;
+            free(tmp->jseq);
+            free(tmp);
+        }
+        tmp_prev = tmp;
     }
 }
 
@@ -113,6 +155,7 @@ int executer(char *line)
     {
         case 0:
             // Le fils execute ce code
+            free(cpyLine);
             if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1)
             {
                 return -1;
@@ -135,8 +178,8 @@ int executer(char *line)
             }
             break;
     }
-
     free(cpyLine);
+
 
     return 0;
 }
