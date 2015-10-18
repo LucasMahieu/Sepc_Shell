@@ -33,7 +33,7 @@ void terminate(char *line);
 #if USE_GUILE == 1
 #include <libguile.h>
 
-void add_jobs(pid_t pidj, char ** seql)
+void add_jobs(pid_t pidj, char *** seql)
 {
     jobs * toAdd = NULL;
     toAdd = malloc(sizeof(*toAdd));
@@ -61,7 +61,7 @@ void print_jobs()
     for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
     {
         char ** cmds = tmp->jseq;
-        printf("pid : %d | command was :\" ", tmp->pid_number);
+        printf("pid : %d | command was : ", tmp->pid_number);
         for(i = 0; cmds[i] != 0; i++)
         {
             printf("%s", cmds[i]);
@@ -131,7 +131,7 @@ int executer(char *line)
             // Si & a été écrit, le shell s'affiche directement
             if (cmd->bg) 
             {
-                add_jobs(pid, cmd->seq[0]);
+                add_jobs(pid, cmd->seq);
             }
             else
             {
@@ -148,7 +148,6 @@ SCM executer_wrapper(SCM x)
     return scm_from_int(executer(scm_to_locale_stringn(x, 0)));
 }
 #endif
-
 
 void terminate(char *line) {
 #ifdef USE_GNU_READLINE
@@ -212,5 +211,3 @@ int main() {
     }
 
 }
-
-
