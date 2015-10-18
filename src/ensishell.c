@@ -78,7 +78,11 @@ int executer(char *line)
             return -1;
             break;
         default:
-            waitpid(pid, &status, 0);
+            // Si & a été écrit, le shell s'affiche directement
+            if (!cmd->bg) 
+            {
+                waitpid(pid, &status, 0);
+            }
             // Le père execute ce code
             break;
     }
