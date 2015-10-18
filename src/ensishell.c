@@ -104,7 +104,6 @@ int executer(char *line)
         }
         printf("\n");
     }
->>>>>>> 2519794599ad83cf6a7f3c466cb2ea9f079b8a0d
 
     if (!strcmp(cmd->seq[0][0],"jobs"))
     {
