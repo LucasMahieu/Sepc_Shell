@@ -6,6 +6,7 @@ struct JOBS
     char *jseq;
     pid_t pid_number;
     struct JOBS * next;
+    int end;
 };
 typedef struct JOBS jobs;
 

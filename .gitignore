@@ -18,10 +18,10 @@
 
 # emacs backup
 *~
+*.swp
 
 # ignore build directory
 build/
-<<<<<<< HEAD
 
 # Tags
-tags/
+tags
