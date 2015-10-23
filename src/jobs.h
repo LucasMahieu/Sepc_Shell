@@ -1,13 +1,13 @@
-#ifndef _JOBS_
-#define _JOBS_
+#ifndef __JOBS_H__
+#define __JOBS_H__
 
-struct jobs
+struct JOBS
 {
     char *jseq;
     pid_t pid_number;
-    struct jobs * next;
+    struct JOBS * next;
 };
-typedef struct jobs jobs;
+typedef struct JOBS jobs;
 
 // Print jobs and free those which are terminated.
 void print_jobs();

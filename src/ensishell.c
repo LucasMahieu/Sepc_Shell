@@ -12,7 +12,6 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <errno.h>
-
 #include "variante.h"
 #include "readcmd.h"
 #include "jobs.h"
@@ -49,11 +48,14 @@ void add_jobs(pid_t pidj, char * seql)
     }
     else
     {
-        toAdd->next = jlist->next;
+        toAdd->next = jlist;
         jlist = toAdd;
     }
 }
-
+/*
+ *Je pense que tu dois creer une fonction delete_jobs ici pour que dans la fonction executer on puisse supprimer le job une fois qu'il sera terminer 
+ *
+ */
 void print_jobs()
 {
     //int status = 0;
@@ -137,7 +139,13 @@ int executer(char *line)
     }
 
     free(cpyLine);
-
+//Je pense que c'est ici qu'il faudra retirer le jobs de la liste : 
+/*
+            if (cmd->bg) 
+            {
+                delete_jobs(pid, cpyLine);
+            }
+ */
     return 0;
 }
 
