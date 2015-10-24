@@ -112,11 +112,19 @@ void free_jobs()
 int executer(char *line)
 {
     int i = 0, j = 0;
-    int status;
-    pid_t pid;
+    int status1;
+    pid_t pid1;
     char * cpyLine = malloc(sizeof(char) * (strlen(line) + 1));
     strcpy(cpyLine, line);
     struct cmdline *cmd = 0;
+/*
+ *Variable pour le pipe
+ */
+    int status2;
+    int pid_wait;
+    pid_t pid2;
+    int pipefd[2];
+
     // Parse cmd and free line
     cmd = parsecmd(&line);
 
@@ -151,45 +159,100 @@ int executer(char *line)
         print_jobs();
         return 0;
     }
-
-    // On fork pour créer un nouveau processus.
-    switch(pid = fork())
-    {
-        case 0:
-            // Le fils execute ce code
-            free(cpyLine);
-            if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1)
-            {
+// Cas sans pipe 
+    if (cmd->seq[1]==0){
+        switch(pid1 = fork())
+        {
+            case 0:
+                // Le fils execute ce code
+                free(cpyLine);
+                if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1)
+                {
+                    return -1;
+                }
+                break;
+                // En cas d'erreur, on retourne -1.
+            case -1:
                 return -1;
-            }
-            break;
-        // En cas d'erreur, on retourne -1.
-        case -1:
+                break;
+            default:
+                // Le père execute ce code
+                // Si & a été écrit, le shell s'affiche directement
+                if (cmd->bg) {
+                    add_jobs(pid1, cpyLine);
+                } else{
+                    waitpid(pid1, &status1, 0);
+                }
+                break;
+        }
+        free(cpyLine);
+        return 0;
+    } 
+// Cas avec pipe    
+    else{
+        if(pipe(pipefd)){
+            perror("error in the pipe creation");
             return -1;
-            break;
-        default:
-            // Le père execute ce code
-            // Si & a été écrit, le shell s'affiche directement
-            if (cmd->bg) 
-            {
-                add_jobs(pid, cpyLine);
-            }
-            else
-            {
-                waitpid(pid, &status, 0);
-            }
-            break;
+        }
+        // Creation du FIlS1 pour faire la partie droite du pipe
+        switch(pid1=fork()) {
+            case -1:
+                //Case d'erreur du fork
+                return -1;
+                break;
+            case 0:
+                // Le fils execute ce code
+                //On dit au fils qu'il va devoir lire son entrée par le pipe qui le lie au pere et plus sur le STDIN
+                dup2(pipefd[0],0);
+                //On ferme le descriteur de fichier en ecriture et en lecture 
+                if (close(pipefd[0])) return -1;
+                if (close(pipefd[1])) return -1;
+                // Et on exec la partie gauche du pipe
+                if ((execvp(cmd->seq[1][0],cmd->seq[1])) == -1){
+                    // Cas d'erreur de l'exec: retourne -1
+                    perror("error in the exec of the children 1");
+                    return -1;
+                }
+                break;
+            default:
+                // Le père execute ce code
+                // Creation du second processus pour la partie gauche du pipe
+                switch(pid2 = fork()){
+                    case -1:
+                        //Cas d'erreur du fork
+                        return -1;
+                        break;
+                    case 0:
+                        //Le Fils 2 exec ce code
+                        // On dit au Fils2 qu'il ne va plus ecrit sur le STDOUT mais dans le pipe qui le lie au fils
+                        dup2(pipefd[1],1);
+                        //On ferme les acces au pipe 
+                        if (close(pipefd[1])) return -1;
+                        if (close(pipefd[0])) return -1;
+                        //Et on execute la partie droite du pipe
+                        if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1){
+                            // Cas d'erreur de l'exec: retourne -1
+                            perror("error in the exec of the children 2");
+                            return -1;
+                        }
+                        break;
+                    default:
+                        //Le Pere exec ceci = attendre la fin de Fils 2
+                        //waitpid(pid,&status,0);
+                        //waitpid(pid2,&status2,0);
+                        break;
+                }
+                printf(" pid1 = %d --- pid2 = %d ", pid1, pid2);
+                pid_wait = wait(&status1);
+//                printf("PID du proc qui se termine = %d avec status = %d \n",pid_wait, status1);
+//                pid_wait = wait(&status2);
+//                printf("PID du proc qui se termine = %d avec status = %d ",pid_wait, status2);
+                break;
+        }
+        printf("\n");
+        free(cpyLine);
+        return 0;
     }
-    free(cpyLine);
-//Je pense que c'est ici qu'il faudra retirer le jobs de la liste : 
-/*
-            if (cmd->bg) 
-            {
-                delete_jobs(pid, cpyLine);
-            }
- */
-
-    return 0;
 }
 
 SCM executer_wrapper(SCM x)
@@ -226,7 +289,7 @@ int main() {
          *         can not be cleaned at the end of the program. Thus
          *                 one memory leak per command seems unavoidable yet */
         line = readline(prompt);
-        if (line == 0 || ! strncmp(line,"exit", 4)) {
+        if (line == 0 || ! strncmp(line,"exit", 4) || !strncmp(line,"\0",1) ) {
             terminate(line);
         }
 
@@ -258,5 +321,5 @@ int main() {
         }
         
     }
-
+    return 0;
 }
