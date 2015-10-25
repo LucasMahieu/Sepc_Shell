@@ -217,39 +217,33 @@ int executer(char *line)
             default:
                 // Le père execute ce code
                 // Creation du second processus pour la partie gauche du pipe
-                switch(pid2 = fork()){
-                    case -1:
-                        //Cas d'erreur du fork
+                if((pid2=fork()) == 0){
+                    //Le Fils 2 exec ce code
+                    // On dit au Fils2 qu'il ne va plus ecrit sur le STDOUT mais dans le pipe qui le lie au fils
+                    dup2(pipefd[1],1);
+                    //On ferme les acces au pipe 
+                    if (close(pipefd[1])) return -1;
+                    if (close(pipefd[0])) return -1;
+                    //Et on execute la partie droite du pipe
+                    if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1){
+                        // Cas d'erreur de l'exec: retourne -1
+                        perror("error in the exec of the children 2");
                         return -1;
-                        break;
-                    case 0:
-                        //Le Fils 2 exec ce code
-                        // On dit au Fils2 qu'il ne va plus ecrit sur le STDOUT mais dans le pipe qui le lie au fils
-                        dup2(pipefd[1],1);
-                        //On ferme les acces au pipe 
-                        if (close(pipefd[1])) return -1;
-                        if (close(pipefd[0])) return -1;
-                        //Et on execute la partie droite du pipe
-                        if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1){
-                            // Cas d'erreur de l'exec: retourne -1
-                            perror("error in the exec of the children 2");
-                            return -1;
-                        }
-                        break;
-                    default:
-                        //Le Pere exec ceci = attendre la fin de Fils 2
-                        //waitpid(pid,&status,0);
-                        //waitpid(pid2,&status2,0);
-                        break;
+                    }
+                } else if(pid2 == -1){
+                        perror("error in the fork of the children 2");
+                        return -1;
                 }
+                else{
+                    //Le Pere exec ceci 
+                }
+                pid_wait = waitpid(pid2,&status2,0);
+                printf("pere: %d ---  pid1 = %d --- pid2 = %d \n",getpid(), pid1, pid2);
+                printf("PID du proc qui se termine = %d avec status = %d \n",pid_wait, status1);
+                pid_wait = waitpid(pid1,&status1,WNOWAIT);
+                printf("PID du proc qui se termine = %d avec status = %d ",pid_wait,status2);
                 break;
-        }
-        pid_wait = waitpid(pid2,&status2,0);
-        printf("pere: %d ---  pid1 = %d --- pid2 = %d \n",getpid(), pid1, pid2);
-        printf("PID du proc qui se termine = %d avec status = %d \n",pid_wait, status1);
-        pid_wait = waitpid(pid1,&status1,WNOWAIT);
-        printf("PID du proc qui se termine = %d avec status = %d ",pid_wait,status2);
-                
+        } 
         printf("\n");
         free(cpyLine);
         return 0;
