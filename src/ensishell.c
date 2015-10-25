@@ -242,13 +242,14 @@ int executer(char *line)
                         //waitpid(pid2,&status2,0);
                         break;
                 }
-                printf(" pid1 = %d --- pid2 = %d ", pid1, pid2);
-                pid_wait = wait(&status1);
-//                printf("PID du proc qui se termine = %d avec status = %d \n",pid_wait, status1);
-//                pid_wait = wait(&status2);
-//                printf("PID du proc qui se termine = %d avec status = %d ",pid_wait, status2);
                 break;
         }
+        pid_wait = waitpid(pid2,&status2,0);
+        printf("pere: %d ---  pid1 = %d --- pid2 = %d \n",getpid(), pid1, pid2);
+        printf("PID du proc qui se termine = %d avec status = %d \n",pid_wait, status1);
+        pid_wait = waitpid(pid1,&status1,WNOWAIT);
+        printf("PID du proc qui se termine = %d avec status = %d ",pid_wait,status2);
+                
         printf("\n");
         free(cpyLine);
         return 0;
