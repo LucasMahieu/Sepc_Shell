@@ -143,7 +143,7 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
 } 
 
 // Cas d'execution dans le cas avec pipes.
-int exec_pipe_cmd(struct cmdline *cmd) {
+int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
 
     // pid1 : partie droite
     // pid2 : partie gauche
@@ -215,13 +215,19 @@ int exec_pipe_cmd(struct cmdline *cmd) {
                     // pour le père et permettent aux processus de se terminer.
                     if (close(pipefd[0])) return -1;
                     if (close(pipefd[1])) return -1;
-                    // On attend d'abord que la partie gauche soit finie.
-                    waitpid(pid2, &status1, 0);
-                    waitpid(pid1, &status2, 0);
+                    if (cmd->bg) {
+                        add_jobs(pid1, cpyLine);
+                    }
+                    else {
+                        // On attend d'abord que la partie gauche soit finie.
+                        waitpid(pid2, &status1, 0);
+                        waitpid(pid1, &status2, 0);
+                    }
                     break;
             }
             break;
     }
+    free(cpyLine);
     return 0;   
 }
 
@@ -270,8 +276,8 @@ int executer(char *line)
     } 
     // Cas avec pipe
     else {
-        free(cpyLine);
-        return exec_pipe_cmd(cmd);
+        //free(cpyLine);
+        return exec_pipe_cmd(cmd, cpyLine);
     }
 }
 
