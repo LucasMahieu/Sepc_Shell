@@ -33,6 +33,7 @@ void terminate(char *line);
 #if USE_GUILE == 1
 #include <libguile.h>
 
+// Add new jobs to the global jobs list.
 void add_jobs(pid_t pidj, char * seql)
 {
     jobs * toAdd = NULL;
@@ -53,10 +54,8 @@ void add_jobs(pid_t pidj, char * seql)
         jlist = toAdd;
     }
 }
-/*
- *Je pense que tu dois creer une fonction delete_jobs ici pour que dans la fonction executer on puisse supprimer le job une fois qu'il sera terminer 
- *
- */
+
+// Print the current job list.
 void print_jobs()
 {
     int status = 1;
@@ -70,6 +69,7 @@ void print_jobs()
     }
 }
 
+// Free finished jobs in the job list.
 void free_jobs()
 {
     int status = 1;
@@ -86,6 +86,7 @@ void free_jobs()
         waitpid(tmp->pid_number, &status, WNOHANG);
         if (!status)
         {
+            // A commenter ou non en fonction des tests.
             printf("%s (PID = %d) is over.\n", tmp->jseq, tmp->pid_number);
             tmp->end = 1;
         }
@@ -110,7 +111,7 @@ void free_jobs()
     }
 }
 
-
+// Cas d'execution dans le cas sans pipe.
 int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
     pid_t pid;
     int status;
@@ -141,27 +142,35 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
     return 0;
 } 
 
+// Cas d'execution dans le cas avec pipes.
 int exec_pipe_cmd(struct cmdline *cmd) {
+
+    // pid1 : partie droite
+    // pid2 : partie gauche
     pid_t pid1 , pid2;
     int status1, status2;
-    int pid_wait;
     int pipefd[2];
 
     if(pipe(pipefd)){
         perror("error in the pipe creation");
         return -1;
     }
-    // Creation du FIlS1 pour faire la partie droite du pipe
+
+    // Creation du fils pour faire la partie droite du pipe
     switch( pid1=fork() ) {
         case -1:
-            //Case d'erreur du fork
+            //Cas d'erreur du fork
             return -1;
             break;
         case 0:
-            // Le fils execute ce code
-            //On dit au fils qu'il va devoir lire son entrée par le pipe et plus sur le STDIN
+            // Le premier fils execute ce code (partie droite)
+            // On crée une copie de pipefd[0] qui est STDIN
+            // et qui correspond maintenant aussi à l'entrée du pipe.
+            // On peut supprimer pipefd[0] car c'est STDIN le descripteur maintenant,
+            // pipefd[1] ne sert à rien car on utilise la sortie normale
+            // de grep.
             dup2(pipefd[0],0);
-            //On ferme le descriteur de fichier en ecriture et en lecture 
+            //On ferme le descriteur de fichier en ecriture et en lecture.
             if (close(pipefd[0])) return -1;
             if (close(pipefd[1])) return -1;
             // Et on exec la partie gauche du pipe
@@ -170,38 +179,50 @@ int exec_pipe_cmd(struct cmdline *cmd) {
                 perror("error in the exec of the children 1");
                 return -1;
             }
+            // Le processus va s'executer jusqu'à qu'il n'y ait plus rien
+            // en entrée (deuxième fils) et que le pipe soit fermé partout.
             break;
         default:
-            // Le père execute ce code
-            // Creation du second processus pour la partie gauche du pipe
-            if((pid2=fork()) == 0){
-                //Le Fils 2 exec ce code
-                // On dit au Fils2 qu'il ne va plus ecrir sur le STDOUT mais dans le pipe
-                dup2(pipefd[1],1);
-                //On ferme les acces au pipe 
-                if (close(pipefd[1])) return -1;
-                if (close(pipefd[0])) return -1;
-                //Et on execute la partie droite du pipe
-                if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1){
-                    // Cas d'erreur de l'exec: retourne -1
-                    perror("error in the exec of the children 2");
+            // Code executé par le père principal
+            switch ( pid2 = fork() ) {
+                case -1:
+                    // Erreur du fork()
                     return -1;
-                }
-            } else if(pid2 == -1){
-                perror("error in the fork of the children 2");
-                return -1;
+                    break;
+                case 0:
+                    // Le deuxième fils execute ce code (partie gauche du pipe)
+                    // On crée une copie de pipefd[1] avec STDOUT comme
+                    // descripteur.
+                    dup2(pipefd[1], 1);
+                    // On peut alors supprimer l'entrée du pipe :
+                    // même qu'avant et la sortie car on a fait une copie.
+                    if (close(pipefd[0])) return -1;
+                    if (close(pipefd[1])) return -1;
+                    // On execute la partie gauche du pipe.
+                    if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1){
+                        // Cas d'erreur de l'exec: retourne -1
+                        perror("error in the exec of the children 1");
+                        return -1;
+                    }
+                    break;
+                    // Le processus s'execute et produit sa sortie sur
+                    // STDOUT lue par le premier fils qui s'execute en
+                    // même temps.
+                default:
+                    // Le père principal execute ce code.
+                    // Ces descripteurs du pipe sont toujours ouvert
+                    // à ce point !!! On doit les fermer car ils sont inutiles
+                    // pour le père et permettent aux processus de se terminer.
+                    if (close(pipefd[0])) return -1;
+                    if (close(pipefd[1])) return -1;
+                    // On attend d'abord que la partie gauche soit finie.
+                    waitpid(pid2, &status1, 0);
+                    waitpid(pid1, &status2, 0);
+                    break;
             }
-            else{
-                //Le Pere exec ceci 
-            }
-            pid_wait = waitpid(pid2,&status2,0);
-            printf("pere: %d ---  pid1 = %d --- pid2 = %d \n",getpid(), pid1, pid2);
-            printf("PID du proc qui se termine = %d avec status = %d \n",pid_wait, status2);
-            pid_wait = waitpid(pid1,&status1,WNOWAIT);
-            printf("PID du proc qui se termine = %d avec status = %d \n",pid_wait,status1);
             break;
     }
-    return 0;
+    return 0;   
 }
 
 int executer(char *line)
@@ -253,8 +274,6 @@ int executer(char *line)
         return exec_pipe_cmd(cmd);
     }
 }
-
-
 
 SCM executer_wrapper(SCM x)
 {
