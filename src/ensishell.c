@@ -121,15 +121,13 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
     pid_t pid;
     int status;
 
-    // Descripteur pour le fichier eventuel en entrée
-    int fd_in;
-    // Descripteur pour le fichier eventuel en sortie
-    int fd_out;
     
     switch(pid = fork()) {
         case 0:
             // S'il y a un fichier en entrée.
             if (cmd->in != NULL) {
+                // Descripteur pour le fichier eventuel en entrée
+                int fd_in;
                 fd_in = open(cmd->in, O_RDONLY);
                 if (fd_in == -1) {
                     return -1;
@@ -139,6 +137,8 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
             }
             // S'il y a un fichier en sortie.
             if (cmd->out != NULL) {
+                // Descripteur pour le fichier eventuel en sortie
+                int fd_out;
                 // If the file does not exist, it is created with all privileges
                 fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
                 if (fd_out == -1) {
@@ -207,6 +207,20 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
             //On ferme le descriteur de fichier en ecriture et en lecture.
             if (close(pipefd[0])) return -1;
             if (close(pipefd[1])) return -1;
+
+            // S'il y a un fichier en sortie.
+            if (cmd->out != NULL) {
+                // Descripteur pour le fichier eventuel en sortie
+                int fd_out;
+                // If the file does not exist, it is created with all privileges
+                fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
+                if (fd_out == -1) {
+                    return -1;
+                }
+                dup2(fd_out, 1);
+                if (close(fd_out)) return -1;
+            }
+
             // Et on exec la partie gauche du pipe
             if ((execvp(cmd->seq[1][0],cmd->seq[1])) == -1){
                 // Cas d'erreur de l'exec: retourne -1
@@ -232,6 +246,19 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
                     // même qu'avant et la sortie car on a fait une copie.
                     if (close(pipefd[0])) return -1;
                     if (close(pipefd[1])) return -1;
+
+                    // S'il y a un fichier en entrée.
+                    if (cmd->in != NULL) {
+                        // Descripteur pour le fichier eventuel en entrée
+                        int fd_in;
+                        fd_in = open(cmd->in, O_RDONLY);
+                        if (fd_in == -1) {
+                            return -1;
+                        }
+                        dup2(fd_in, 0);
+                        if (close(fd_in)) return -1;
+                    }
+
                     // On execute la partie gauche du pipe.
                     if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1){
                         // Cas d'erreur de l'exec: retourne -1
