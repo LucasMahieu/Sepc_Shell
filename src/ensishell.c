@@ -220,6 +220,7 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
                     if (close(pipefd[0])) return -1;
                     if (close(pipefd[1])) return -1;
                     if (cmd->bg) {
+                        add_jobs(pid2, cpyLine);
                         add_jobs(pid1, cpyLine);
                     }
                     else {
