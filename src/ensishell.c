@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/time.h>
+#include <time.h>
 #include <errno.h>
 #include <signal.h>
 #include "variante.h"
@@ -18,6 +20,7 @@
 #include "jobs.h"
 void terminate(char *line);
 
+struct timeval* global_time=NULL;
 
 
 #ifndef VARIANTE
@@ -87,7 +90,7 @@ void free_jobs()
         if (!status)
         {
             // A commenter ou non en fonction des tests.
-            printf("%s (PID = %d) is over.\n", tmp->jseq, tmp->pid_number);
+            //printf("%s (PID = %d) is over.\n", tmp->jseq, tmp->pid_number);
             tmp->end = 1;
         }
         else
@@ -130,6 +133,7 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
             break;
         default:
             // Le père execute ce code
+            gettimeofday(global_time,NULL);
             // Si & a été écrit, le shell s'affiche directement
             if (cmd->bg) {
                 add_jobs(pid, cpyLine);
@@ -281,6 +285,28 @@ int executer(char *line)
     }
 }
 
+void print_time(int signal) 
+{   
+    long sec = 0;
+    long usec = 0;
+    long global_t = 0;
+    long diff_t = 0;
+    long now_t = 0;
+    struct timeval * now_time=NULL;
+    now_time = (struct timeval*)malloc(sizeof(*now_time));
+    now_time->tv_sec = 0;
+    now_time->tv_usec = 0;
+    gettimeofday(now_time,NULL);
+    global_t = (long)( (global_time->tv_sec)*100000 + global_time->tv_usec);
+    now_t = (long)( (now_time->tv_sec)*100000 + now_time->tv_usec);
+    diff_t = (long)(now_t - global_t);
+    sec = (long)(diff_t / 100000);
+    usec = (long)(  (long)diff_t - ((long)sec)*100000  ) ;
+    
+    printf("\nTemps de l'execution : %ld sec et %ld usec\n",sec,usec);
+    free(now_time); 
+}
+
 SCM executer_wrapper(SCM x)
 {
     return scm_from_int(executer(scm_to_locale_stringn(x, 0)));
@@ -294,6 +320,8 @@ void terminate(char *line) {
 #endif
     if (line)
         free(line);
+    if(global_time)
+        free(global_time);
     printf("exit\n");
     exit(0);
 }
@@ -307,17 +335,37 @@ int main() {
     scm_c_define_gsubr("executer", 1, 0, 0, executer_wrapper);
 #endif
 
+    /*
+     * Init of the sigaction
+    */
+    global_time= (struct timeval*)malloc(sizeof(*global_time));
+    global_time->tv_sec = 0;
+    global_time->tv_usec = 0;
+    gettimeofday(global_time,NULL);
+    struct sigaction sig_traitant = {};
+    sig_traitant.sa_handler = print_time;
+    sigemptyset(&sig_traitant.sa_mask);
+    // SA_NOCLDWAIT = si le signal est SIGCHLD, ses fils qui se terminent ne deviennent pas zombis
+    // SA_RESTART = Les appels systeme interrompus par un signal capté sont relancés au lieu de renvoyer -1
+    sig_traitant.sa_flags = 0;// SA_NOCLDWAIT | SA_RESTART;
+    if( sigaction(SIGCHLD,&sig_traitant,0) == -1) {
+        perror("Sigaction error");
+    }
+
+
+    char *prompt = "ensishell>";
+
     while (1) {
         char *line=0;
-        char *prompt = "ensishell>";
-
-
         /* Readline use some internal memory structure that
          *         can not be cleaned at the end of the program. Thus
          *                 one memory leak per command seems unavoidable yet */
         line = readline(prompt);
-        if (line == 0 || ! strncmp(line,"exit", 4) || !strncmp(line,"\0",1) ) {
+        if (line == 0 || ! strncmp(line,"exit", 4) ) {
             terminate(line);
+        }
+        if (!strncmp(line,"\0",1)) {
+            continue;
         }
 
 #ifdef USE_GNU_READLINE
@@ -350,5 +398,6 @@ int main() {
                 break;
         } 
     }
+    free(global_time);
     return 0;
 }
