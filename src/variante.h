@@ -2,7 +2,7 @@
 #define VARIANTE_H
 
 #define LOGINS devalonh;mahieluc
-#define SUJET 0
+#define SUJET 3
 #define USE_GUILE 1
 
 #define VARIANTE SUJET

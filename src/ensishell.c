@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <signal.h>
 #include "variante.h"
 #include "readcmd.h"
 #include "jobs.h"
@@ -110,7 +111,7 @@ void free_jobs()
 }
 
 
-int exec_simple_cmd(struct cmdline *cmd,char **cpyLine) {
+int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
 pid_t pid;
 int status;
     switch(pid = fork()) {
@@ -130,13 +131,13 @@ int status;
                 // Le père execute ce code
                 // Si & a été écrit, le shell s'affiche directement
                 if (cmd->bg) {
-                    add_jobs(pid, *cpyLine);
+                    add_jobs(pid,cpyLine);
                 } else{
                     waitpid(pid, &status, 0);
                 }
                 break;
         }
-        free(*cpyLine);
+        free(cpyLine);
         return 0;
     } 
 
@@ -244,7 +245,7 @@ int executer(char *line)
     }
 // Cas sans pipe 
     if (cmd->seq[1]==0) {
-        return exec_simple_cmd(cmd,&cpyLine);
+        return exec_simple_cmd(cmd,cpyLine);
     } 
 // Cas avec pipe
     else {
