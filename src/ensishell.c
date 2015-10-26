@@ -65,7 +65,7 @@ void print_jobs()
         // WNOHANG so that we don't wait but only check status.
         waitpid(tmp->pid_number, &status, WNOHANG);
 
-        printf("pid : %d | command was : %s ", tmp->pid_number, tmp->jseq);
+        printf("pid : %d | command was : %s \n", tmp->pid_number, tmp->jseq);
     }
 }
 
@@ -85,7 +85,7 @@ void free_jobs()
         waitpid(tmp->pid_number, &status, WNOHANG);
         if (!status)
         {
-            printf("%s is over.", tmp->jseq);
+            printf("%s (PID = %d) is over.\n", tmp->jseq, tmp->pid_number);
             tmp->end = 1;
         }
         else
@@ -285,8 +285,6 @@ int main() {
         char *line=0;
         char *prompt = "ensishell>";
 
-        // free the finished jobs
-        free_jobs();
 
         /* Readline use some internal memory structure that
          *         can not be cleaned at the end of the program. Thus
@@ -311,6 +309,9 @@ int main() {
             continue;
         }
 #endif
+        // free the finished jobs
+        free_jobs();
+
         switch (executer(line))
         {
             case 0:
