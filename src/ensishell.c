@@ -302,7 +302,7 @@ int get_nb_pipe( struct cmdline* cmd )
     while(cmd->seq[i] != 0) {
         i++;
     }
-    return i+1;
+    return i;
 }
 
 int exec_multi_pipe(struct cmdline *cmd, char *cpyLine) 
@@ -335,7 +335,10 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                         return -1;
                     }
                     dup2(fd_out, 1);
+                    dup2(fd[0],0);
                     if (close(fd_out)) return -1;
+                    if (close(fd[0])) return -1;
+                    if (close(fd[1])) return -1;
                 }
                 // S'il y a un fichier en entré du 1er pipe
                 else if ( (i==0) && ((cmd->in)!=NULL) ) {
@@ -343,9 +346,13 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                         if ( (fd_in=open(cmd->in, O_RDONLY)) ) return -1;
                         dup2(fd_in, 0);
                         if (close(fd_in)) return -1;
+                        dup2(fd_prev[1],1);
+                        if (close(fd[0])) return -1;
+                        if (close(fd[1])) return -1;
                 }
                 else {
                     dup2(fd_prev[1],1);
+                    if (close(fd_prev[1])) return -1;
                     if (i==0) fd[0]=0;
                     dup2(fd[0],0);
                     //On ferme le descriteur de fichier en ecriture et en lecture.
