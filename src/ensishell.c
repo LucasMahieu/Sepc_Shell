@@ -22,7 +22,7 @@
 #include "jobs.h"
 void terminate(char *line);
 
-struct timeval* global_time=NULL;
+//struct timeval* global_time=NULL;
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -41,10 +41,15 @@ struct timeval* global_time=NULL;
 void add_jobs(pid_t pidj, char * seql)
 {
     jobs * toAdd = NULL;
-    toAdd = malloc(sizeof(*toAdd));
+    toAdd = (jobs*)malloc(sizeof(*toAdd));
     
+    toAdd->begin = (struct timeval*)malloc(sizeof(*(toAdd->begin)));
+    (toAdd->begin)->tv_sec = 0;
+    (toAdd->begin)->tv_usec = 0;
+    gettimeofday(toAdd->begin,NULL);
+
     toAdd->pid_number = pidj;
-    toAdd->jseq = malloc(sizeof(char) * (strlen(seql) + 1));
+    toAdd->jseq = (char*)malloc(sizeof(char) * (strlen(seql) + 1));
     strcpy(toAdd->jseq,seql);
 
     if (jlist == NULL)
@@ -100,11 +105,13 @@ void free_jobs()
         if (tmp->end && tmp == jlist) {
             jlist = tmp->next;
             free(tmp->jseq);
+            free(tmp->begin);
             free(tmp);
         }
         else if (tmp->end) {
             tmp_prev->next = tmp->next;
             free(tmp->jseq);
+            free(tmp->begin);
             free(tmp);
         }
         tmp_prev = tmp;
@@ -159,7 +166,7 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine)
             // Le père execute ce code
             // Si & a été écrit, le shell s'affiche directement
             if (cmd->bg) {
-                gettimeofday(global_time,NULL);
+                //gettimeofday(global_time,NULL);
                 add_jobs(pid, cpyLine);
             } 
             else {
@@ -313,36 +320,57 @@ void print_time(int signal)
 {   
     long sec = 0;
     long usec = 0;
-    long global_t = 0;
+    long begin_t = 0;
     long diff_t = 0;
     long now_t = 0;
     struct timeval * now_time=NULL;
+    now_time = (struct timeval*)malloc(sizeof(*now_time));
+    now_time->tv_sec = 0;
+    now_time->tv_usec = 0;
     
     /*-----------------------------------------------------------------------------
-     *  Recherche du jobs qui à fini
+     *  Recherche du jobs qui à fini, et suppresion de la jlist
      *-----------------------------------------------------------------------------*/
     jobs* p = jlist;
-    int status;
-    for(p=jlist; p!=NULL; p=p->next){
+    jobs* p_prev = p;
+    int status = 1;
+    if (jlist==NULL) return;
+    for(p=jlist; p!=NULL; p = p->next){
         waitpid(p->pid_number,&status,WNOHANG);
         if(!status){
+            p->end = 1;
+            status = 1;
             /*---------------------------------
              *  Calcul du temps d'execution
              *---------------------------------*/
-            now_time = (struct timeval*)malloc(sizeof(*now_time));
-            now_time->tv_sec = 0;
-            now_time->tv_usec = 0;
             gettimeofday(now_time,NULL);
-            global_t = (long)( (global_time->tv_sec)*100000 + global_time->tv_usec);
+            begin_t = (long)( ((p->begin)->tv_sec)*100000 + (p->begin)->tv_usec );
             now_t = (long)( (now_time->tv_sec)*100000 + now_time->tv_usec);
-            diff_t = (long)(now_t - global_t);
+            diff_t = (long)(now_t - begin_t);
             sec = (long)(diff_t / 100000);
             usec = (long)(  (long)diff_t - ((long)sec)*100000  ) ;
             printf("\nCmd:'%s' with PID=%d is over\n",p->jseq,(int)p->pid_number);
             printf("Duration: %ld.%ld sec\n",sec,usec);
-        }
-    }
 
+            if (p == jlist) {
+                jlist = p->next;
+                free(p->jseq);
+                free(p->begin);
+                free(p);
+            } 
+            else {
+                p_prev->next = p->next;
+                free(p->jseq);
+                free(p->begin);
+                free(p);
+            }
+        }
+        else {
+            status = 1;
+            p->end = 0;
+        }
+        p_prev = p;
+    }
     free(now_time); 
 }
 
@@ -397,8 +425,8 @@ void terminate(char *line) {
 #endif
     if (line)
         free(line);
-    if(global_time)
-        free(global_time);
+//    if(global_time)
+//        free(global_time);
     printf("exit\n");
     exit(0);
 }
@@ -415,10 +443,10 @@ int main() {
     /*
      * Init of the sigaction
     */
-    global_time= (struct timeval*)malloc(sizeof(*global_time));
-    global_time->tv_sec = 0;
-    global_time->tv_usec = 0;
-    gettimeofday(global_time,NULL);
+    //global_time= (struct timeval*)malloc(sizeof(*global_time));
+    //global_time->tv_sec = 0;
+    //global_time->tv_usec = 0;
+    //gettimeofday(global_time,NULL);
     struct sigaction sig_traitant = {};
     sig_traitant.sa_handler = print_time;
     sigemptyset(&sig_traitant.sa_mask);
@@ -459,7 +487,7 @@ int main() {
         }
 #endif
         // free the finished jobs
-        free_jobs();
+        //free_jobs();
 
         switch (executer(line))
         {
@@ -473,6 +501,6 @@ int main() {
                 break;
         } 
     }
-    free(global_time);
+    //free(global_time);
     return 0;
 }

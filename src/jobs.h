@@ -5,6 +5,7 @@ struct JOBS
 {
     char *jseq;
     pid_t pid_number;
+    struct timeval* begin;
     struct JOBS * next;
     int end;
 };
