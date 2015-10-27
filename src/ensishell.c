@@ -22,7 +22,6 @@ void terminate(char *line);
 
 struct timeval* global_time=NULL;
 
-
 #ifndef VARIANTE
 #error "Variante non défini !!"
 #endif
@@ -115,7 +114,8 @@ void free_jobs()
 }
 
 // Cas d'execution dans le cas sans pipe.
-int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
+int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) 
+{
     pid_t pid;
     int status;
     switch(pid = fork()) {
@@ -147,7 +147,8 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) {
 } 
 
 // Cas d'execution dans le cas avec pipes.
-int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
+int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) 
+{
 
     // pid1 : partie droite
     // pid2 : partie gauche
@@ -164,6 +165,7 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
     switch( pid1=fork() ) {
         case -1:
             //Cas d'erreur du fork
+            perror("1st fork error");
             return -1;
             break;
         case 0:
@@ -191,6 +193,7 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
             switch ( pid2 = fork() ) {
                 case -1:
                     // Erreur du fork()
+                    perror("2nd fork error");
                     return -1;
                     break;
                 case 0:
@@ -222,7 +225,7 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
                     if (cmd->bg) {
                         add_jobs(pid2, cpyLine);
                         add_jobs(pid1, cpyLine);
-                    }
+                    } 
                     else {
                         // On attend d'abord que la partie gauche soit finie.
                         waitpid(pid2, &status1, 0);
@@ -236,54 +239,22 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) {
     return 0;   
 }
 
-int executer(char *line)
+void  print_cmd(struct cmdline * cmd)
 {
-    int i = 0, j = 0;
-    char * cpyLine = malloc(sizeof(char) * (strlen(line) + 1));
-    strcpy(cpyLine, line);
-    struct cmdline *cmd = 0;
-
-    // Parse cmd and free line
-    cmd = parsecmd(&line);
-
-    // If input stream is closed
-    if (!cmd) {
-        terminate(0);
-    }
-
-    if (cmd->err) {
-        /* Syntax error, read another command */
-        printf("error: %s\n", cmd->err);
-        return 0;
-    }
-
     if (cmd->in) printf("in: %s\n", cmd->in);
     if (cmd->out) printf("out: %s\n", cmd->out);
     if (cmd->bg) printf("background (&)\n");
 
     /* Display each command of the pipe */
-    for (i=0; cmd->seq[i]!=0; i++) {
+    for (int i=0; cmd->seq[i]!=0; i++) {
         char **cmds = cmd->seq[i];
         printf("seq[%d]: ", i);
-        for (j=0; cmds[j]!=0; j++) {
+        for (int j=0; cmds[j]!=0; j++) {
             printf("'%s' ", cmds[j]);
         }
         printf("\n");
     }
 
-    if (!strcmp(cmd->seq[0][0],"jobs")) {
-        print_jobs();
-        return 0;
-    }
-    // Cas sans pipe 
-    if (cmd->seq[1]==0) {
-        return exec_simple_cmd(cmd,cpyLine);
-    } 
-    // Cas avec pipe
-    else {
-        //free(cpyLine);
-        return exec_pipe_cmd(cmd, cpyLine);
-    }
 }
 
 void print_time(int signal) 
@@ -304,9 +275,47 @@ void print_time(int signal)
     sec = (long)(diff_t / 100000);
     usec = (long)(  (long)diff_t - ((long)sec)*100000  ) ;
     
-    printf("\nTemps de l'execution : %ld sec et %ld usec\n",sec,usec);
+    printf("\nSignal %d reçu -- Temps de l'execution : %ld sec et %ld usec\n",signal,sec,usec);
     free(now_time); 
 }
+
+int executer(char *line)
+{
+    char * cpyLine = malloc(sizeof(char) * (strlen(line) + 1));
+    strcpy(cpyLine, line);
+    struct cmdline *cmd = 0;
+
+    // Parse cmd and free line
+    cmd = parsecmd(&line);
+
+    // If input stream is closed
+    if (!cmd) {
+        terminate(0);
+    }
+
+    if (cmd->err) {
+        /* Syntax error, read another command */
+        printf("error: %s\n", cmd->err);
+        return 0;
+    }
+    
+    print_cmd(cmd);
+    
+    if (!strcmp(cmd->seq[0][0],"jobs")) {
+        print_jobs();
+        return 0;
+    }
+    // Cas sans pipe 
+    if (cmd->seq[1]==0) {
+        return exec_simple_cmd(cmd,cpyLine);
+    } 
+    // Cas avec pipe
+    else {
+        //free(cpyLine);
+        return exec_pipe_cmd(cmd, cpyLine);
+    }
+}
+
 
 SCM executer_wrapper(SCM x)
 {
@@ -346,15 +355,13 @@ int main() {
     struct sigaction sig_traitant = {};
     sig_traitant.sa_handler = print_time;
     sigemptyset(&sig_traitant.sa_mask);
-    // SA_NOCLDWAIT = si le signal est SIGCHLD, ses fils qui se terminent ne deviennent pas zombis
-    // SA_RESTART = Les appels systeme interrompus par un signal capté sont relancés au lieu de renvoyer -1
-    sig_traitant.sa_flags = 0;// SA_NOCLDWAIT | SA_RESTART;
+    sig_traitant.sa_flags = 0;
     if( sigaction(SIGCHLD,&sig_traitant,0) == -1) {
         perror("Sigaction error");
     }
 
 
-    char *prompt = "ensishell>";
+    char *prompt = "megashell>";
 
     while (1) {
         char *line=0;
