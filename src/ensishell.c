@@ -88,25 +88,21 @@ void free_jobs()
     {
         // WNOHANG so that we don't wait but only check status.
         waitpid(tmp->pid_number, &status, WNOHANG);
-        if (!status)
-        {
+        if (!status) {
             // A commenter ou non en fonction des tests.
             //printf("%s (PID = %d) is over.\n", tmp->jseq, tmp->pid_number);
             tmp->end = 1;
         }
-        else
-        {
+        else {
             tmp->end = 0;
         }
  
-        if (tmp->end && tmp == jlist)
-        {
+        if (tmp->end && tmp == jlist) {
             jlist = tmp->next;
             free(tmp->jseq);
             free(tmp);
         }
-        else if (tmp->end)
-        {
+        else if (tmp->end) {
             tmp_prev->next = tmp->next;
             free(tmp->jseq);
             free(tmp);
@@ -161,10 +157,9 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine)
             break;
         default:
             // Le père execute ce code
-            gettimeofday(global_time,NULL);
-
             // Si & a été écrit, le shell s'affiche directement
             if (cmd->bg) {
+                gettimeofday(global_time,NULL);
                 add_jobs(pid, cpyLine);
             } 
             else {
@@ -322,17 +317,32 @@ void print_time(int signal)
     long diff_t = 0;
     long now_t = 0;
     struct timeval * now_time=NULL;
-    now_time = (struct timeval*)malloc(sizeof(*now_time));
-    now_time->tv_sec = 0;
-    now_time->tv_usec = 0;
-    gettimeofday(now_time,NULL);
-    global_t = (long)( (global_time->tv_sec)*100000 + global_time->tv_usec);
-    now_t = (long)( (now_time->tv_sec)*100000 + now_time->tv_usec);
-    diff_t = (long)(now_t - global_t);
-    sec = (long)(diff_t / 100000);
-    usec = (long)(  (long)diff_t - ((long)sec)*100000  ) ;
     
-    printf("\nSignal %d reçu -- Temps de l'execution : %ld sec et %ld usec\n",signal,sec,usec);
+    /*-----------------------------------------------------------------------------
+     *  Recherche du jobs qui à fini
+     *-----------------------------------------------------------------------------*/
+    jobs* p = jlist;
+    int status;
+    for(p=jlist; p!=NULL; p=p->next){
+        waitpid(p->pid_number,&status,WNOHANG);
+        if(!status){
+            /*---------------------------------
+             *  Calcul du temps d'execution
+             *---------------------------------*/
+            now_time = (struct timeval*)malloc(sizeof(*now_time));
+            now_time->tv_sec = 0;
+            now_time->tv_usec = 0;
+            gettimeofday(now_time,NULL);
+            global_t = (long)( (global_time->tv_sec)*100000 + global_time->tv_usec);
+            now_t = (long)( (now_time->tv_sec)*100000 + now_time->tv_usec);
+            diff_t = (long)(now_t - global_t);
+            sec = (long)(diff_t / 100000);
+            usec = (long)(  (long)diff_t - ((long)sec)*100000  ) ;
+            printf("\nCmd:'%s' with PID=%d is over\n",p->jseq,(int)p->pid_number);
+            printf("Duration: %ld.%ld sec\n",sec,usec);
+        }
+    }
+
     free(now_time); 
 }
 
