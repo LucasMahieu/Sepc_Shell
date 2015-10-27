@@ -77,10 +77,8 @@ void print_jobs()
 // Cas d'execution dans le cas sans pipe.
 int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) 
 {
-
     pid_t pid;
     int status;
-
     
     switch(pid = fork()) {
         case 0:
@@ -121,9 +119,8 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine)
             break;
         default:
             // Le père execute ce code
-            // Si & a été écrit, cmde shell s'affiche directement
+            // Si & a été écrit, cmd shell s'affiche directement
             if (cmd->bg) {
-                //gettimeofday(global_time,NULL);
                 add_jobs(pid, cpyLine);
             } 
             else {
@@ -173,10 +170,10 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
                 if (close(fd_out)) return -1;
             }
             else {
-            dup2(pipefd[0],0);
-            //On ferme le descriteur de fichier en ecriture et en lecture.
-            if (close(pipefd[0])) return -1;
-            if (close(pipefd[1])) return -1;
+                dup2(pipefd[0],0);
+                //On ferme le descriteur de fichier en ecriture et en lecture.
+                if (close(pipefd[0])) return -1;
+                if (close(pipefd[1])) return -1;
             }
 
             // Et on exec la partie droite du pipe
@@ -236,7 +233,7 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
                     if (close(pipefd[0])) return -1;
                     if (close(pipefd[1])) return -1;
                     if (cmd->bg) {
-                        //add_jobs(pid2, cpyLine);
+                        add_jobs(pid2, cpyLine);
                         add_jobs(pid1, cpyLine);
                     } 
                     else {
@@ -252,8 +249,8 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
     return 0;   
 }
 
-// Retourne le nombre de commandes.
-int get_nb_cmd( struct cmdline* cmd ) 
+// Retourne le nombre de séquences.
+int get_nb_seq( struct cmdline* cmd ) 
 {
     int i =0;
     while(cmd->seq[i] != 0) {
@@ -265,91 +262,89 @@ int get_nb_cmd( struct cmdline* cmd )
 // Cas d'execution dans le cas de plusieures pipes.
 int exec_multi_pipe(struct cmdline *cmd, char *cpyLine) 
 {
-    int nb_cmd=0;
-    for(nb_cmd=0;cmd->seq[nb_cmd] != 0; nb_cmd ++){}
-    pid_t* pid=NULL;
-    if( (pid = (pid_t*)malloc(nb_cmd*sizeof(*pid))) == NULL ) return -1;
-    int* status = NULL;
-    if ( (status = (int*)malloc(nb_cmd*sizeof(*status))) == NULL ) return -1;
-    int fd_prev[2]={0,1};
-    int i=0;
+    // Nombre de séquences.
+    int nb_seq = get_nb_seq(cmd);
+    // Nombre de pipes.
+    int nb_pipe = nb_seq - 1;
+    int i = 0;
 
-    for (  i=0; i<nb_cmd ; i++) {
-        int fd[2];
-        if( i<nb_cmd-1 ){
-            if ( pipe(fd) ){
+    // Tableau de PID pour chacun des processus crées.
+    pid_t *pid=NULL;
+    if ((pid = (pid_t*) malloc(nb_seq * sizeof(*pid))) == NULL) return -1;
+
+    // Tableau de status pour chaque processus.
+    int *status = NULL;
+    if ((status = (int*) malloc(nb_seq * sizeof(*status))) == NULL) return -1;
+
+    // Tableau des pipes à deux dimensions alloué dynamiquement :
+    // fd[i][j] où 0 < i < nb_pipe - 1
+    //             0 < j < 2
+    int **fd;
+    fd = calloc(nb_pipe, sizeof(*fd));
+    *fd = calloc(2, sizeof(**fd));
+    for (i = 1; i < nb_pipe; i++) fd[i] = fd[i-1] + 2;
+
+    // Pour toutes les séquences en partant de la dernière.
+    for (i= nb_seq - 1; i >= 0; i--) {
+        // Si i n'est pas la première séquence, on crée un pipe.
+        // A gauche de la séquence i est le pipe i-1.
+        if(i != 0) {
+            if (pipe(fd[i-1])) {
                 perror("pipe error");
                 return -1;
             }
         }
-        switch( pid[i]=fork() ) {
+        // On fork chaque séquence à partir du père principal.
+        switch(pid[i] = fork()) {
             case -1:
                 perror("fork error");
                 return -1;
                 break;
             case 0:
-                // Le fils i execute ce code (partie droite)
-                if (i<nb_cmd-1) {
-                    dup2(fd[1],1);
-                    if (close(fd[0])) return -1;
-                    if (close(fd[1])) return -1;
+                // Le fils i execute ce code.
+                // Si on est au dernier.
+                if (i == nb_seq - 1) {
+                    dup2(fd[nb_pipe - 1][0], 0);
+                    if (close(fd[nb_pipe - 1][0])) return -1;
+                    //if (close(fd[nb_pipe - 1][1])) return -1;
                 }
-                if (i>0) {
-                    dup2(fd_prev[0],0);
-                    if (close(fd_prev[0])) return -1;
-                    if (close(fd_prev[1])) return -1;
-                    if (close(fd[0])) return -1;
-                    if (close(fd[1])) return -1;
+                // Si on est au premier.
+                else if (i == 0) {
+                    dup2(fd[0][1], 1);
+                    if (close(fd[0][1])) return -1;
                 }
-                // S'il y a un fichier en sortie du dernier pipe.
-/*                if ( (i==(nb_cmd-1))&&(cmd->out != NULL) ) {
-                    int fd_out;
-                    // If the file does not exist, it is created with all privileges
-                    fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
-                    if (fd_out == -1) return -1;
-                    dup2(fd_out, 1);
-                    if (close(fd_out)) return -1;
+                // Pour tous les autres.
+                else {
+                    // On écrit dans le pipe précedent (à droite)
+                    // et on le ferme.
+                    dup2(fd[i][1], 1);
+                    if (close(fd[i][1])) return -1;
+
+                    dup2(fd[i-1][0], 0);
+                    if (close(fd[i-1][0])) return -1;
+                    //if (close(fd[i-1][1])) return -1;
                 }
-                // S'il y a un fichier en entré du 1er pipe
-                if ( (i==0) && ((cmd->in)!=NULL) ) {
-                        int fd_in;
-                        if ( (fd_in=open(cmd->in, O_RDONLY)) ) return -1;
-                        dup2(fd_in, 0);
-                        if (close(fd_in)) return -1;
-                }
-*/
+
                 // Et on exec la partie droite du pipe
                 if ((execvp(cmd->seq[i][0],cmd->seq[i])) == -1){
                     perror("error in the exec of the children ");
                     return -1;
                 }
-                // Le processus va s'executer jusqu'à qu'il n'y ait plus rien
-                // en entrée (fils fils i-1) et que le pipe soit fermé partout.
                 break;
             default:
-                if(i>0){
-                    if (close(fd_prev[1])) return -1;
-                    if (close(fd_prev[0])) return -1;
+                // On passe à la descendance le pipe en écriture.
+                if (i != 0) {
+                    //if (close(fd[i-1][0])) return -1;
                 }
-                fd_prev[0]=fd[0];
-                fd_prev[1]=fd[1];
-                //if (close(fd[0])) return -1;
-                //if (close(fd[1])) return -1;
                 break;
         }
     } 
-    //if (close(fd[0])) return -1;
-    //if (close(fd[1])) return -1;
-    if (close(fd_prev[0])) return -1;
-    if (close(fd_prev[1])) return -1;
-    waitpid(pid[nb_cmd-1],&status[nb_cmd-1],0);
-//    waitpid(pid[0],&status[0],0);
-//    for ( i=nb_cmd-1 ; i>=0 ; i--){
-//        waitpid(pid[i],&(status[i]),0);
-       //wait(NULL);
-//    }
+    waitpid(pid[nb_seq - 1], &status[nb_seq - 1], 0);
+
     free(pid);
     free(status);
+    free(*fd);
+    free(fd);
     free(cpyLine);
     return 0;
 }
@@ -370,7 +365,6 @@ void  print_cmd(struct cmdline * cmd)
         }
         printf("\n");
     }
-
 }
 
 // Traitant d'interruption quand un processus fils se termine.
@@ -579,6 +573,5 @@ int main()
                 break;
         } 
     }
-    //free(global_time);
     return 0;
 }
