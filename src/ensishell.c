@@ -79,6 +79,7 @@ void print_jobs()
 }
 
 // Free finished jobs in the job list.
+// !!! PLUS UTILISEE !!!
 void free_jobs()
 {
     int status = 1;
@@ -202,15 +203,6 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
             break;
         case 0:
             // Le premier fils execute ce code (partie droite)
-            // On crée une copie de pipefd[0] qui est STDIN
-            // et qui correspond maintenant aussi à l'entrée du pipe.
-            // On peut supprimer pipefd[0] car c'est STDIN le descripteur maintenant,
-            // pipefd[1] ne sert à rien car on utilise la sortie normale
-            // de grep.
-            dup2(pipefd[0],0);
-            //On ferme le descriteur de fichier en ecriture et en lecture.
-            if (close(pipefd[0])) return -1;
-            if (close(pipefd[1])) return -1;
 
             // S'il y a un fichier en sortie.
             if (cmd->out != NULL) {
@@ -224,8 +216,14 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
                 dup2(fd_out, 1);
                 if (close(fd_out)) return -1;
             }
+            else {
+            dup2(pipefd[0],0);
+            //On ferme le descriteur de fichier en ecriture et en lecture.
+            if (close(pipefd[0])) return -1;
+            if (close(pipefd[1])) return -1;
+            }
 
-            // Et on exec la partie gauche du pipe
+            // Et on exec la partie droite du pipe
             if ((execvp(cmd->seq[1][0],cmd->seq[1])) == -1){
                 // Cas d'erreur de l'exec: retourne -1
                 perror("error in the exec of the children 1");
@@ -297,6 +295,87 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
     free(cpyLine);
     return 0;   
 }
+
+int get_nb_pipe( struct cmdline* cmd ) 
+{
+    int i =0;
+    while(cmd->seq[i] != 0) {
+        i++;
+    }
+    return i+1;
+}
+
+int exec_multi_pipe(struct cmdline *cmd, char *cpyLine) 
+{
+    int nb_pipe=0;
+    nb_pipe = get_nb_pipe(cmd);
+    pid_t pid[nb_pipe];
+    int status[nb_pipe];
+    int fd[2];
+    int fd_prev[2]={0,1};
+
+    for ( int i=(nb_pipe-1); i>-1 ; i--) {
+        if(pipe(fd)){
+            perror("pipe error");
+            return -1;
+        }
+        switch( pid[i]=fork() ) {
+            case -1:
+                perror("fork error");
+                return -1;
+                break;
+            case 0:
+                // Le fils i execute ce code (partie droite)
+                // S'il y a un fichier en sortie du dernier pipe.
+                if ( (i==(nb_pipe-1))&&(cmd->out != NULL) ) {
+                    int fd_out;
+                    // If the file does not exist, it is created with all privileges
+                    fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
+                    if (fd_out == -1) {
+                        return -1;
+                    }
+                    dup2(fd_out, 1);
+                    if (close(fd_out)) return -1;
+                }
+                // S'il y a un fichier en entré du 1er pipe
+                else if ( (i==0) && ((cmd->in)!=NULL) ) {
+                        int fd_in;
+                        if ( (fd_in=open(cmd->in, O_RDONLY)) ) return -1;
+                        dup2(fd_in, 0);
+                        if (close(fd_in)) return -1;
+                }
+                else {
+                    dup2(fd_prev[1],1);
+                    if (i==0) fd[0]=0;
+                    dup2(fd[0],0);
+                    //On ferme le descriteur de fichier en ecriture et en lecture.
+                    if (close(fd[0])) return -1;
+                    if (close(fd[1])) return -1;
+                }
+
+                // Et on exec la partie droite du pipe
+                if ((execvp(cmd->seq[i][0],cmd->seq[i])) == -1){
+                    perror("error in the exec of the children ");
+                    return -1;
+                }
+                // Le processus va s'executer jusqu'à qu'il n'y ait plus rien
+                // en entrée (fils fils i-1) et que le pipe soit fermé partout.
+                break;
+            default:
+                fd_prev[0]=fd[0];
+                fd_prev[1]=fd[1];
+                if (close(fd[0])) return -1;
+                if (close(fd[1])) return -1;
+                break;
+        }
+    } 
+    for (int j=0 ; j<nb_pipe ; j++){
+    waitpid(pid[j],&(status[j]),0);
+    }
+    free(cpyLine);
+    return 0;   
+}
+
 
 void  print_cmd(struct cmdline * cmd)
 {
@@ -407,7 +486,7 @@ int executer(char *line)
     // Cas avec pipe
     else {
         //free(cpyLine);
-        return exec_pipe_cmd(cmd, cpyLine);
+        return exec_multi_pipe(cmd, cpyLine);
     }
 }
 
