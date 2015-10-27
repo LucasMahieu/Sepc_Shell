@@ -309,11 +309,14 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
 {
     int nb_cmd=0;
     for(nb_cmd=0;cmd->seq[nb_cmd] != 0; nb_cmd ++){}
-    pid_t pid[nb_cmd];
-//    int status[nb_cmd];
+    pid_t* pid=NULL;
+    if( (pid = (pid_t*)malloc(nb_cmd*sizeof(*pid))) == NULL ) return -1;
+    int* status = NULL;
+    if ( (status = (int*)malloc(nb_cmd*sizeof(*status))) == NULL ) return -1;
     int fd_prev[2]={0,1};
+    int i=0;
 
-    for ( int i=0; i<nb_cmd ; i++) {
+    for (  i=0; i<nb_cmd ; i++) {
         int fd[2];
         if( i<nb_cmd-1 ){
             if ( pipe(fd) ){
@@ -335,13 +338,13 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                 }
                 if (i>0) {
                     dup2(fd_prev[0],0);
-                    if (close(fd[0])) return -1;
-                    if (close(fd[1])) return -1;
                     if (close(fd_prev[0])) return -1;
                     if (close(fd_prev[1])) return -1;
+                    if (close(fd[0])) return -1;
+                    if (close(fd[1])) return -1;
                 }
                 // S'il y a un fichier en sortie du dernier pipe.
-                if ( (i==(nb_cmd-1))&&(cmd->out != NULL) ) {
+/*                if ( (i==(nb_cmd-1))&&(cmd->out != NULL) ) {
                     int fd_out;
                     // If the file does not exist, it is created with all privileges
                     fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
@@ -356,7 +359,7 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                         dup2(fd_in, 0);
                         if (close(fd_in)) return -1;
                 }
-
+*/
                 // Et on exec la partie droite du pipe
                 if ((execvp(cmd->seq[i][0],cmd->seq[i])) == -1){
                     perror("error in the exec of the children ");
@@ -367,8 +370,8 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                 break;
             default:
                 if(i>0){
-                    if (close(fd_prev[0])) return -1;
                     if (close(fd_prev[1])) return -1;
+                    if (close(fd_prev[0])) return -1;
                 }
                 fd_prev[0]=fd[0];
                 fd_prev[1]=fd[1];
@@ -377,12 +380,18 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                 break;
         }
     } 
+    //if (close(fd[0])) return -1;
+    //if (close(fd[1])) return -1;
     if (close(fd_prev[0])) return -1;
     if (close(fd_prev[1])) return -1;
-    for (int j=0 ; j<nb_cmd ; j++){
-       // waitpid(pid[j],&(status[j]),0);
-       wait(NULL);
-    }
+    waitpid(pid[nb_cmd-1],&status[nb_cmd-1],0);
+//    waitpid(pid[0],&status[0],0);
+//    for ( i=nb_cmd-1 ; i>=0 ; i--){
+//        waitpid(pid[i],&(status[i]),0);
+       //wait(NULL);
+//    }
+    free(pid);
+    free(status);
     free(cpyLine);
     return 0;   
 }
