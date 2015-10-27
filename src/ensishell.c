@@ -20,9 +20,8 @@
 #include "variante.h"
 #include "readcmd.h"
 #include "jobs.h"
-void terminate(char *line);
 
-//struct timeval* global_time=NULL;
+void terminate(char *line);
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -37,13 +36,14 @@ void terminate(char *line);
 #if USE_GUILE == 1
 #include <libguile.h>
 
-// Add new jobs to the global jobs list.
+// Add new jobs to the global jobs list filling each
+// usefull information.
 void add_jobs(pid_t pidj, char * seql)
 {
     jobs * toAdd = NULL;
-    toAdd = (jobs*)malloc(sizeof(*toAdd));
+    toAdd = (jobs*) malloc(sizeof(*toAdd));
     
-    toAdd->begin = (struct timeval*)malloc(sizeof(*(toAdd->begin)));
+    toAdd->begin = (struct timeval*) malloc(sizeof(*(toAdd->begin)));
     (toAdd->begin)->tv_sec = 0;
     (toAdd->begin)->tv_usec = 0;
     gettimeofday(toAdd->begin,NULL);
@@ -67,61 +67,17 @@ void add_jobs(pid_t pidj, char * seql)
 // Print the current job list.
 void print_jobs()
 {
-    int status = 1;
     jobs * tmp = NULL;
     for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
     {
-        // WNOHANG so that we don't wait but only check status.
-        waitpid(tmp->pid_number, &status, WNOHANG);
-
         printf("pid : %d | command was : %s \n", tmp->pid_number, tmp->jseq);
-    }
-}
-
-// Free finished jobs in the job list.
-// !!! PLUS UTILISEE !!!
-void free_jobs()
-{
-    int status = 1;
-    jobs * tmp = NULL;
-    jobs * tmp_prev = NULL;
-    if (jlist == NULL)
-    {
-        return;
-    }
-    tmp_prev = jlist;
-    for(tmp = jlist; tmp != NULL; tmp = tmp->next)
-    {
-        // WNOHANG so that we don't wait but only check status.
-        waitpid(tmp->pid_number, &status, WNOHANG);
-        if (!status) {
-            // A commenter ou non en fonction des tests.
-            //printf("%s (PID = %d) is over.\n", tmp->jseq, tmp->pid_number);
-            tmp->end = 1;
-        }
-        else {
-            tmp->end = 0;
-        }
- 
-        if (tmp->end && tmp == jlist) {
-            jlist = tmp->next;
-            free(tmp->jseq);
-            free(tmp->begin);
-            free(tmp);
-        }
-        else if (tmp->end) {
-            tmp_prev->next = tmp->next;
-            free(tmp->jseq);
-            free(tmp->begin);
-            free(tmp);
-        }
-        tmp_prev = tmp;
     }
 }
 
 // Cas d'execution dans le cas sans pipe.
 int exec_simple_cmd(struct cmdline *cmd,char *cpyLine) 
 {
+
     pid_t pid;
     int status;
 
@@ -165,7 +121,7 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine)
             break;
         default:
             // Le père execute ce code
-            // Si & a été écrit, le shell s'affiche directement
+            // Si & a été écrit, cmde shell s'affiche directement
             if (cmd->bg) {
                 //gettimeofday(global_time,NULL);
                 add_jobs(pid, cpyLine);
@@ -179,7 +135,7 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine)
     return 0;
 } 
 
-// Cas d'execution dans le cas avec pipes.
+// Cas d'execution dans le cas avec une pipe.
 int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) 
 {
 
@@ -189,7 +145,7 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
     int status1, status2;
     int pipefd[2];
 
-    if(pipe(pipefd)){
+    if(pipe(pipefd)) {
         perror("error in the pipe creation");
         return -1;
     }
@@ -296,6 +252,7 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
     return 0;   
 }
 
+// Retourne le nombre de pipe utilisé dans la commande.
 int get_nb_pipe( struct cmdline* cmd ) 
 {
     int i =0;
@@ -305,6 +262,7 @@ int get_nb_pipe( struct cmdline* cmd )
     return i;
 }
 
+// Cas d'execution dans le cas de plusieures pipes.
 int exec_multi_pipe(struct cmdline *cmd, char *cpyLine) 
 {
     int nb_pipe=0;
@@ -380,10 +338,10 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
     waitpid(pid[j],&(status[j]),0);
     }
     free(cpyLine);
-    return 0;   
+    return 0;
 }
 
-
+// Affiche des informations sur la séquence rentrée.
 void  print_cmd(struct cmdline * cmd)
 {
     if (cmd->in) printf("in: %s\n", cmd->in);
@@ -402,41 +360,64 @@ void  print_cmd(struct cmdline * cmd)
 
 }
 
+// Traitant d'interruption quand un processus fils se termine.
 void print_time(int signal) 
 {   
+    // Uptime du processus : sec + usec
     long sec = 0;
     long usec = 0;
+
+    // begin_t : date à laquelle le processus a démarré.
+    // now_t : date actuelle (fin du processus).
+    // diff_t : différence de ces deux dates : uptime.
+    // Tout est en us.
     long begin_t = 0;
     long diff_t = 0;
     long now_t = 0;
-    struct timeval * now_time=NULL;
-    now_time = (struct timeval*)malloc(sizeof(*now_time));
+
+    // Structure timeval pour récupérer le temps actuel.
+    struct timeval * now_time = NULL;
+    now_time = (struct timeval*) malloc(sizeof(*now_time));
     now_time->tv_sec = 0;
     now_time->tv_usec = 0;
     
-    /*-----------------------------------------------------------------------------
-     *  Recherche du jobs qui à fini, et suppresion de la jlist
-     *-----------------------------------------------------------------------------*/
-    jobs* p = jlist;
-    jobs* p_prev = p;
+    jobs *p = jlist;
+    jobs *p_prev = p;
     int status = 1;
-    if (jlist==NULL) return;
-    for(p=jlist; p!=NULL; p = p->next){
+
+    /*-----------------------------------------------------------*
+     *  Recherche du jobs qui a fini, et suppresion de la jlist  *
+     *-----------------------------------------------------------*/
+
+    if (jlist == NULL) return;
+    for (p = jlist; p != NULL; p = p->next) {
+        // On actualise le champ status pour chaque processus
+        // de la jlist pour savoir s'il est terminé.
         waitpid(p->pid_number,&status,WNOHANG);
-        if(!status){
+
+        // S'il est terminé :
+        //  - on affiche son temps d'execution en informant l'utilisateur ;
+        //  - on l'enlève de la jlist.
+        if(!status) {
             p->end = 1;
             status = 1;
-            /*---------------------------------
-             *  Calcul du temps d'execution
-             *---------------------------------*/
+
+            /*------------------------------*
+             *  Calcul du temps d'execution *
+             *------------------------------*/
+
             gettimeofday(now_time,NULL);
-            begin_t = (long)( ((p->begin)->tv_sec)*100000 + (p->begin)->tv_usec );
-            now_t = (long)( (now_time->tv_sec)*100000 + now_time->tv_usec);
-            diff_t = (long)(now_t - begin_t);
-            sec = (long)(diff_t / 100000);
-            usec = (long)(  (long)diff_t - ((long)sec)*100000  ) ;
-            printf("\nCmd:'%s' with PID=%d is over\n",p->jseq,(int)p->pid_number);
-            printf("Duration: %ld.%ld sec\n",sec,usec);
+            begin_t = (long) (p->begin->tv_sec * 1000000 + p->begin->tv_usec);
+            now_t = (long) (now_time->tv_sec * 1000000 + now_time->tv_usec);
+            diff_t = (long) (now_t - begin_t);
+            sec = (long) (diff_t / 1000000);
+            usec = (long) (diff_t % 1000000);
+            printf("\nCMD:'%s' with PID=%d is over.\n", p->jseq, p->pid_number);
+            printf("Duration: %ld.%06ld s\n", sec, usec);
+
+            /*---------------------------*
+             * Suppression de la cellule *
+             *---------------------------*/
 
             if (p == jlist) {
                 jlist = p->next;
@@ -451,15 +432,19 @@ void print_time(int signal)
                 free(p);
             }
         }
+
+        // S'il n'est pas terminé, on ne fait rien :)
         else {
             status = 1;
             p->end = 0;
         }
+
         p_prev = p;
     }
     free(now_time); 
 }
 
+// Execution normale
 int executer(char *line)
 {
     char * cpyLine = malloc(sizeof(char) * (strlen(line) + 1));
@@ -497,27 +482,27 @@ int executer(char *line)
     }
 }
 
-
 SCM executer_wrapper(SCM x)
 {
     return scm_from_int(executer(scm_to_locale_stringn(x, 0)));
 }
 #endif
 
-void terminate(char *line) {
+// Terminate in case of problem.
+void terminate(char *line)
+{
 #ifdef USE_GNU_READLINE
     /* rl_clear_history() does not exist yet in centOS 6 */
     clear_history();
 #endif
     if (line)
         free(line);
-//    if(global_time)
-//        free(global_time);
     printf("exit\n");
     exit(0);
 }
 
-int main() {
+int main() 
+{
     printf("Variante %d: %s\n", VARIANTE, VARIANTE_STRING);
 
 #ifdef USE_GUILE
@@ -526,23 +511,20 @@ int main() {
     scm_c_define_gsubr("executer", 1, 0, 0, executer_wrapper);
 #endif
 
-    /*
-     * Init of the sigaction
-    */
-    //global_time= (struct timeval*)malloc(sizeof(*global_time));
-    //global_time->tv_sec = 0;
-    //global_time->tv_usec = 0;
-    //gettimeofday(global_time,NULL);
+    /*********************************************
+     * Initialisation du traitant d'interruption *
+     *********************************************/
+
     struct sigaction sig_traitant = {};
     sig_traitant.sa_handler = print_time;
-    sigemptyset(&sig_traitant.sa_mask);
+    // Permet d'exlure tous les signaux du set.
+    sigemptyset(&(sig_traitant.sa_mask));
     sig_traitant.sa_flags = 0;
-    if( sigaction(SIGCHLD,&sig_traitant,0) == -1) {
+    if( sigaction(SIGCHLD, &sig_traitant, NULL) == -1) {
         perror("Sigaction error");
     }
 
-
-    char *prompt = "megashell>";
+    char *prompt = "coquille>";
 
     while (1) {
         char *line=0;
@@ -572,9 +554,6 @@ int main() {
             continue;
         }
 #endif
-        // free the finished jobs
-        //free_jobs();
-
         switch (executer(line))
         {
             case 0:
