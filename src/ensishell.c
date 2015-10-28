@@ -85,7 +85,7 @@ void print_jobs()
         for(i = 0; i < tmp->nb - 1; i++) {
             printf("%d, ", (tmp->pid_number)[i]);
         }
-        printf("%d.\n", (tmp->pid_number)[tmp->nb - 1]);
+        printf("%d. -- ", (tmp->pid_number)[tmp->nb - 1]);
         printf("CMD : %s \n", tmp->jseq);
     }
 }
