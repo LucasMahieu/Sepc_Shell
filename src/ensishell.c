@@ -182,7 +182,7 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
     //             0 < j < 2
     int **fd;
     fd = calloc(nb_pipe, sizeof(*fd));
-    *fd = calloc(2, sizeof(**fd));
+    *fd = calloc(2 * nb_pipe, sizeof(**fd));
     for (i = 1; i < nb_pipe; i++) fd[i] = fd[i-1] + 2;
 
     // On crée tous les pipes.
@@ -211,8 +211,6 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                     if (cmd->out != NULL) {
                         // Descripteur pour le fichier eventuel en sortie
                         int fd_out;
-                        // If the file exists, delete it.
-                        if (unlink(cmd->out) == -1) return -1;
                         // If the file does not exist, it is created with all privileges
                         fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
                         if (fd_out == -1) {
