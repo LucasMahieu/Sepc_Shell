@@ -38,19 +38,29 @@ void terminate(char *line);
 
 // Add new jobs to the global jobs list filling each
 // usefull information.
-void add_jobs(pid_t pidj, char * seql)
+void add_jobs(pid_t *pidj, char * seql, int nb_seq)
 {
+    int i = 0;
     jobs * toAdd = NULL;
     toAdd = (jobs*) malloc(sizeof(*toAdd));
+
+    toAdd->nb = nb_seq;
     
+    // Temps actuel.
     toAdd->begin = (struct timeval*) malloc(sizeof(*(toAdd->begin)));
     (toAdd->begin)->tv_sec = 0;
     (toAdd->begin)->tv_usec = 0;
     gettimeofday(toAdd->begin,NULL);
 
-    toAdd->pid_number = pidj;
-    toAdd->jseq = (char*)malloc(sizeof(char) * (strlen(seql) + 1));
+    // Allocation dynamique du nom de la commande.
+    toAdd->jseq = (char*) malloc(sizeof(char) * (strlen(seql) + 1));
     strcpy(toAdd->jseq,seql);
+
+    // Allocation dynamique du tableau de pid.
+    toAdd->pid_number = (pid_t*) malloc(sizeof(pid_t) * nb_seq);
+    for(i = 0; i < nb_seq; i++) {
+        (toAdd->pid_number)[i] = pidj[i];
+    }
 
     if (jlist == NULL)
     {
@@ -68,9 +78,16 @@ void add_jobs(pid_t pidj, char * seql)
 void print_jobs()
 {
     jobs * tmp = NULL;
+    int i = 0;
+
     for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
     {
-        printf("pid : %d | command was : %s \n", tmp->pid_number, tmp->jseq);
+        printf("PID(s) : ");
+        for(i = 0; i < tmp->nb - 1; i++) {
+            printf("%d, ", (tmp->pid_number)[i]);
+        }
+        printf("%d.\n", (tmp->pid_number)[tmp->nb - 1]);
+        printf("CMD : %s \n", tmp->jseq);
     }
 }
 
@@ -121,7 +138,7 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine)
             // Le père execute ce code
             // Si & a été écrit, cmd shell s'affiche directement
             if (cmd->bg) {
-                add_jobs(pid, cpyLine);
+                add_jobs(&pid, cpyLine, 1);
             } 
             else {
                 waitpid(pid, &status, 0);
@@ -131,123 +148,6 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine)
     free(cpyLine);
     return 0;
 } 
-
-// Cas d'execution dans le cas avec une pipe.
-int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) 
-{
-
-    // pid1 : partie droite
-    // pid2 : partie gauche
-    pid_t pid1 , pid2;
-    int status1, status2;
-    int pipefd[2];
-
-    if(pipe(pipefd)) {
-        perror("error in the pipe creation");
-        return -1;
-    }
-
-    // Creation du fils pour faire la partie droite du pipe
-    switch( pid1=fork() ) {
-        case -1:
-            //Cas d'erreur du fork
-            perror("1st fork error");
-            return -1;
-            break;
-        case 0:
-            // Le premier fils execute ce code (partie droite)
-
-            // S'il y a un fichier en sortie.
-            if (cmd->out != NULL) {
-                // Descripteur pour le fichier eventuel en sortie
-                int fd_out;
-                // If the file does not exist, it is created with all privileges
-                fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
-                if (fd_out == -1) {
-                    return -1;
-                }
-                dup2(fd_out, 1);
-                if (close(fd_out)) return -1;
-            }
-            else {
-                dup2(pipefd[0],0);
-                //On ferme le descriteur de fichier en ecriture et en lecture.
-                if (close(pipefd[0])) return -1;
-                if (close(pipefd[1])) return -1;
-            }
-
-            // Et on exec la partie droite du pipe
-            if ((execvp(cmd->seq[1][0],cmd->seq[1])) == -1){
-                // Cas d'erreur de l'exec: retourne -1
-                perror("error in the exec of the children 1");
-                return -1;
-            }
-            // Le processus va s'executer jusqu'à qu'il n'y ait plus rien
-            // en entrée (deuxième fils) et que le pipe soit fermé partout.
-            break;
-        default:
-            // Code executé par le père principal
-            switch ( pid2 = fork() ) {
-                case -1:
-                    // Erreur du fork()
-                    perror("2nd fork error");
-                    return -1;
-                    break;
-                case 0:
-                    // Le deuxième fils execute ce code (partie gauche du pipe)
-                    // On crée une copie de pipefd[1] avec STDOUT comme
-                    // descripteur.
-                    dup2(pipefd[1], 1);
-                    // On peut alors supprimer l'entrée du pipe :
-                    // même qu'avant et la sortie car on a fait une copie.
-                    if (close(pipefd[0])) return -1;
-                    if (close(pipefd[1])) return -1;
-
-                    // S'il y a un fichier en entrée.
-                    if (cmd->in != NULL) {
-                        // Descripteur pour le fichier eventuel en entrée
-                        int fd_in;
-                        fd_in = open(cmd->in, O_RDONLY);
-                        if (fd_in == -1) {
-                            return -1;
-                        }
-                        dup2(fd_in, 0);
-                        if (close(fd_in)) return -1;
-                    }
-
-                    // On execute la partie gauche du pipe.
-                    if ((execvp(cmd->seq[0][0],cmd->seq[0])) == -1){
-                        // Cas d'erreur de l'exec: retourne -1
-                        perror("error in the exec of the children 1");
-                        return -1;
-                    }
-                    break;
-                    // Le processus s'execute et produit sa sortie sur
-                    // STDOUT lue par le premier fils qui s'execute en
-                    // même temps.
-                default:
-                    // Le père principal execute ce code.
-                    // Ces descripteurs du pipe sont toujours ouvert
-                    // à ce point !!! On doit les fermer car ils sont inutiles
-                    // pour le père et permettent aux processus de se terminer.
-                    if (close(pipefd[0])) return -1;
-                    if (close(pipefd[1])) return -1;
-                    if (cmd->bg) {
-                        add_jobs(pid2, cpyLine);
-                        add_jobs(pid1, cpyLine);
-                    } 
-                    else {
-                        // On attend d'abord que la partie gauche soit finie.
-                        waitpid(pid2, &status1, 0);
-                        waitpid(pid1, &status2, 0);
-                    }
-                    break;
-            }
-            break;
-    }
-    free(cpyLine);
-    return 0;   
-}
 
 // Retourne le nombre de séquences.
 int get_nb_seq( struct cmdline* cmd ) 
@@ -382,7 +282,7 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
     // On attend tous les processus en commençant par le premier
     // qui écrit.
     if (cmd->bg) {
-        for(j = 0; j < nb_seq; j++) add_jobs(pid[j], cpyLine);
+        add_jobs(pid, cpyLine, nb_seq);
     }
     else {
         for(j = 0; j < nb_seq; j++) {
@@ -419,6 +319,7 @@ void  print_cmd(struct cmdline * cmd)
 // Traitant d'interruption quand un processus fils se termine.
 void print_time(int signal) 
 {   
+    int i = 0;
     // Uptime du processus : sec + usec
     long sec = 0;
     long usec = 0;
@@ -447,9 +348,9 @@ void print_time(int signal)
 
     if (jlist == NULL) return;
     for (p = jlist; p != NULL; p = p->next) {
-        // On actualise le champ status pour chaque processus
-        // de la jlist pour savoir s'il est terminé.
-        waitpid(p->pid_number,&status,WNOHANG);
+        // On actualise le champ status pour chaque dernier processus
+        // de chaque commande de la jlist pour savoir s'il est terminé.
+        waitpid((p->pid_number)[p->nb - 1],&status,WNOHANG);
 
         // S'il est terminé :
         //  - on affiche son temps d'execution en informant l'utilisateur ;
@@ -468,7 +369,11 @@ void print_time(int signal)
             diff_t = (long) (now_t - begin_t);
             sec = (long) (diff_t / 1000000);
             usec = (long) (diff_t % 1000000);
-            printf("\nCMD:'%s' with PID=%d is over.\n", p->jseq, p->pid_number);
+            printf("\nCMD:'%s' with PID(s)=", p->jseq);
+            for( i = 0; i < p->nb - 1; i++) {
+                printf(" %d,", (p->pid_number)[i]);
+            }
+            printf(" %d is over.\n", (p->pid_number)[p->nb - 1]);
             printf("Duration: %ld.%06ld s\n", sec, usec);
 
             /*---------------------------*
@@ -479,12 +384,14 @@ void print_time(int signal)
                 jlist = p->next;
                 free(p->jseq);
                 free(p->begin);
+                free(p->pid_number);
                 free(p);
             } 
             else {
                 p_prev->next = p->next;
                 free(p->jseq);
                 free(p->begin);
+                free(p->pid_number);
                 free(p);
             }
         }
@@ -512,19 +419,23 @@ int executer(char *line)
 
     // If input stream is closed
     if (!cmd) {
+        free(cpyLine);
         terminate(0);
     }
 
     if (cmd->err) {
         /* Syntax error, read another command */
         printf("error: %s\n", cmd->err);
+        free(cpyLine);
         return 0;
     }
-    
-    print_cmd(cmd);
+
+    // Décommenter pour avoir des infos sur la ligne.
+    //print_cmd(cmd);
     
     if (!strcmp(cmd->seq[0][0],"jobs")) {
         print_jobs();
+        free(cpyLine);
         return 0;
     }
     // Cas sans pipe 
@@ -556,7 +467,7 @@ void terminate(char *line)
     exit(0);
 }
 
-int main() 
+int main(int argc, char *argv[]) 
 {
     printf("Variante %d: %s\n", VARIANTE, VARIANTE_STRING);
 
@@ -567,6 +478,7 @@ int main()
 #endif
 
     /*********************************************
+    :wa
      * Initialisation du traitant d'interruption *
      *********************************************/
 
@@ -579,7 +491,7 @@ int main()
         perror("Sigaction error");
     }
 
-    char *prompt = "coquille>";
+    char *prompt = (argv[1] == NULL)?"root@pcserveur.ensimag.fr:~# ":argv[1];
 
     while (1) {
         char *line=0;
