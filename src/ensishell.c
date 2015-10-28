@@ -348,7 +348,11 @@ void print_time(int signal)
     for (p = jlist; p != NULL; p = p->next) {
         // On actualise le champ status pour chaque dernier processus
         // de chaque commande de la jlist pour savoir s'il est terminé.
-        waitpid((p->pid_number)[p->nb - 1],&status,WNOHANG);
+        // On doit faire un waitpid pour tous les processus lancés en bg,
+        // sinon ils vont restés en état zombie.
+        for(i = 0; i < p->nb; i++) {
+            waitpid((p->pid_number)[i],&status,WNOHANG);
+        }
 
         // S'il est terminé :
         //  - on affiche son temps d'execution en informant l'utilisateur ;
