@@ -52,13 +52,11 @@ void add_jobs(pid_t pidj, char * seql)
     toAdd->jseq = (char*)malloc(sizeof(char) * (strlen(seql) + 1));
     strcpy(toAdd->jseq,seql);
 
-    if (jlist == NULL)
-    {
+    if (jlist == NULL) {
         jlist = toAdd;
         toAdd->next = NULL;
     }
-    else
-    {
+    else {
         toAdd->next = jlist;
         jlist = toAdd;
     }
@@ -68,8 +66,7 @@ void add_jobs(pid_t pidj, char * seql)
 void print_jobs()
 {
     jobs * tmp = NULL;
-    for(tmp = jlist; tmp != NULL; tmp = tmp -> next)
-    {
+    for(tmp = jlist; tmp != NULL; tmp = tmp -> next) {
         printf("pid : %d | command was : %s \n", tmp->pid_number, tmp->jseq);
     }
 }
@@ -138,7 +135,6 @@ int exec_simple_cmd(struct cmdline *cmd,char *cpyLine)
 // Cas d'execution dans le cas avec une pipe.
 int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine) 
 {
-
     // pid1 : partie droite
     // pid2 : partie gauche
     pid_t pid1 , pid2;
@@ -252,14 +248,12 @@ int exec_pipe_cmd(struct cmdline *cmd, char *cpyLine)
     return 0;   
 }
 
-// Retourne le nombre de commandes.
-int get_nb_cmd( struct cmdline* cmd ) 
-{
-    int i =0;
-    while(cmd->seq[i] != 0) {
-        i++;
+void close_all_fd(int** fd,int nb_cmd){
+    int k=0;
+    for(k=0;k<nb_cmd;k++){
+        close(fd[k][0]);
+        close(fd[k][1]);
     }
-    return i;
 }
 
 // Cas d'execution dans le cas de plusieures pipes.
@@ -271,17 +265,18 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
     if( (pid = (pid_t*)malloc(nb_cmd*sizeof(*pid))) == NULL ) return -1;
     int* status = NULL;
     if ( (status = (int*)malloc(nb_cmd*sizeof(*status))) == NULL ) return -1;
-    int fd_prev[2]={0,1};
     int i=0;
+    int** fd = NULL;
 
-    for (  i=0; i<nb_cmd ; i++) {
-        int fd[2];
-        if( i<nb_cmd-1 ){
-            if ( pipe(fd) ){
-                perror("pipe error");
-                return -1;
-            }
-        }
+    if ( (fd = (int**)malloc((nb_cmd)*sizeof(*fd))) == NULL ) return -1;
+    for (int j=0;j<nb_cmd;j++){
+        if ( (fd[j] = (int*)malloc(2*sizeof(*fd[j]))) == NULL ) return -1;
+    }
+    for(int k=0;k<nb_cmd;k++){
+        pipe(fd[k]);
+    }
+
+    for (  i=nb_cmd-1; i>=0 ; i-- ) {
         switch( pid[i]=fork() ) {
             case -1:
                 perror("fork error");
@@ -289,20 +284,18 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                 break;
             case 0:
                 // Le fils i execute ce code (partie droite)
-                if (i<nb_cmd-1) {
-                    dup2(fd[1],1);
-                    if (close(fd[0])) return -1;
-                    if (close(fd[1])) return -1;
-                }
                 if (i>0) {
-                    dup2(fd_prev[0],0);
-                    if (close(fd_prev[0])) return -1;
-                    if (close(fd_prev[1])) return -1;
-                    if (close(fd[0])) return -1;
-                    if (close(fd[1])) return -1;
+                    dup2(fd[i][0],0);
+//                    if(i==(nb_cmd-1)) {
+//                        close_all_fd(fd,nb_cmd);
+//                    }
+                }
+                if (i<nb_cmd-1) {
+                    dup2(fd[i+1][1],1);
+//                    close_all_fd(fd,nb_cmd);
                 }
                 // S'il y a un fichier en sortie du dernier pipe.
-/*                if ( (i==(nb_cmd-1))&&(cmd->out != NULL) ) {
+                if ( (i==(nb_cmd-1))&&(cmd->out != NULL) ) {
                     int fd_out;
                     // If the file does not exist, it is created with all privileges
                     fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
@@ -317,7 +310,9 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                         dup2(fd_in, 0);
                         if (close(fd_in)) return -1;
                 }
-*/
+
+                close_all_fd(fd,nb_cmd);
+//                printf("fonct: %s\nPID: %d\nfd[0]: %d\nfd[1]: %d\nfd_prev[0]: %d\nfd_prev[1]: %d\n ",*cmd->seq[i],pid[i],fd[0],fd[1],fd_prev[0],fd_prev[1]);
                 // Et on exec la partie droite du pipe
                 if ((execvp(cmd->seq[i][0],cmd->seq[i])) == -1){
                     perror("error in the exec of the children ");
@@ -327,27 +322,17 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                 // en entrée (fils fils i-1) et que le pipe soit fermé partout.
                 break;
             default:
-                if(i>0){
-                    if (close(fd_prev[1])) return -1;
-                    if (close(fd_prev[0])) return -1;
-                }
-                fd_prev[0]=fd[0];
-                fd_prev[1]=fd[1];
-                //if (close(fd[0])) return -1;
-                //if (close(fd[1])) return -1;
                 break;
         }
-    } 
-    //if (close(fd[0])) return -1;
-    //if (close(fd[1])) return -1;
-    if (close(fd_prev[0])) return -1;
-    if (close(fd_prev[1])) return -1;
-    waitpid(pid[nb_cmd-1],&status[nb_cmd-1],0);
-//    waitpid(pid[0],&status[0],0);
-//    for ( i=nb_cmd-1 ; i>=0 ; i--){
-//        waitpid(pid[i],&(status[i]),0);
-       //wait(NULL);
-//    }
+    }
+    close_all_fd(fd,nb_cmd);
+    for ( i=nb_cmd-1 ; i>=0 ; i--){
+        waitpid(pid[i],&(status[i]),0);
+    }
+    for(int k=0;k<nb_cmd;k++){
+        free(fd[k]);
+    }
+    free(fd); 
     free(pid);
     free(status);
     free(cpyLine);
@@ -484,13 +469,7 @@ int executer(char *line)
         print_jobs();
         return 0;
     }
-    // Cas sans pipe 
-    if (cmd->seq[1]==0) {
-        return exec_simple_cmd(cmd,cpyLine);
-    } 
-    // Cas avec pipe
-    else {
-        //free(cpyLine);
+    else{
         return exec_multi_pipe(cmd, cpyLine);
     }
 }
