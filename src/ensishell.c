@@ -459,7 +459,8 @@ void print_time(int signal)
     
     jobs *p = jlist;
     jobs *p_prev = p;
-    int status = 1;
+    int *status = NULL;
+    int status_global = 0;
 
     /*-----------------------------------------------------------*
      *  Recherche du jobs qui a fini, et suppresion de la jlist  *
@@ -467,20 +468,24 @@ void print_time(int signal)
 
     if (jlist == NULL) return;
     for (p = jlist; p != NULL; p = p->next) {
-        // On actualise le champ status pour chaque dernier processus
-        // de chaque commande de la jlist pour savoir s'il est terminé.
-        // On doit faire un waitpid pour tous les processus lancés en bg,
-        // sinon ils vont restés en état zombie.
+        status = (int *) malloc(p->nb * sizeof(*status));
+
+        // On regarde si tous les processus de la commande
+        // son terminés.
         for(i = 0; i < p->nb; i++) {
-            waitpid((p->pid_number)[i],&status,WNOHANG);
+            waitpid((p->pid_number)[i],status + i,WNOHANG);
+        }
+        for(i = 0; i < p->nb; i++) {
+            if (status[i]) {
+                status_global = 1;
+                break;
+            }
         }
 
         // S'il est terminé :
         //  - on affiche son temps d'execution en informant l'utilisateur ;
         //  - on l'enlève de la jlist.
-        if(!status) {
-            p->end = 1;
-            status = 1;
+        if(!status_global) {
 
             /*------------------------------*
              *  Calcul du temps d'execution *
@@ -520,12 +525,9 @@ void print_time(int signal)
         }
 
         // S'il n'est pas terminé, on ne fait rien :)
-        else {
-            status = 1;
-            p->end = 0;
-        }
-
+        
         p_prev = p;
+        free(status);
     }
     free(now_time); 
 }
@@ -611,16 +613,17 @@ int main(int argc, char *argv[])
     if( sigaction(SIGCHLD, &sig_traitant, NULL) == -1) {
         perror("Sigaction error");
     }
+
     if(argv[1] != NULL) {
-        strcat(argv[1]," >");
+        strcat(argv[1],"> ");
     }
-    char *prompt = (argv[1] == NULL)?"root@pcserveur.ensimag.fr:~#":argv[1];
+    char *prompt = (argv[1] == NULL)?"root@pcserveur.ensimag.fr:~# ":argv[1];
 
     while (1) {
         char *line=0;
         /* Readline use some internal memory structure that
-         *         can not be cleaned at the end of the program. Thus
-         *                 one memory leak per command seems unavoidable yet */
+         * can not be cleaned at the end of the program. Thus
+         * one memory leak per command seems unavoidable yet */
         line = readline(prompt);
         if (line == 0 || ! strncmp(line,"exit", 4) ) {
             terminate(line);
