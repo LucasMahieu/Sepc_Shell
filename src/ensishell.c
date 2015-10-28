@@ -267,9 +267,10 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
     // Nombre de pipes.
     int nb_pipe = nb_seq - 1;
     int i = 0;
+    int j = 0;
 
     // Tableau de PID pour chacun des processus crées.
-    pid_t *pid=NULL;
+    pid_t *pid = NULL;
     if ((pid = (pid_t*) malloc(nb_seq * sizeof(*pid))) == NULL) return -1;
 
     // Tableau de status pour chaque processus.
@@ -284,16 +285,16 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
     *fd = calloc(2, sizeof(**fd));
     for (i = 1; i < nb_pipe; i++) fd[i] = fd[i-1] + 2;
 
+    // On crée tous les pipes.
+    for (i = 0; i < nb_pipe; i++) {
+        if (pipe(fd[i])) {
+            perror("pipe error");
+            return -1;
+        }
+    }
+
     // Pour toutes les séquences en partant de la dernière.
     for (i= nb_seq - 1; i >= 0; i--) {
-        // Si i n'est pas la première séquence, on crée un pipe.
-        // A gauche de la séquence i est le pipe i-1.
-        if(i != 0) {
-            if (pipe(fd[i-1])) {
-                perror("pipe error");
-                return -1;
-            }
-        }
         // On fork chaque séquence à partir du père principal.
         switch(pid[i] = fork()) {
             case -1:
@@ -305,24 +306,60 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                 // Si on est au dernier.
                 if (i == nb_seq - 1) {
                     dup2(fd[nb_pipe - 1][0], 0);
-                    if (close(fd[nb_pipe - 1][0])) return -1;
-                    //if (close(fd[nb_pipe - 1][1])) return -1;
+
+                    // Si il y a un fichier en sortie.
+                    if (cmd->out != NULL) {
+                        // Descripteur pour le fichier eventuel en sortie
+                        int fd_out;
+                        // If the file exists, delete it.
+                        if (unlink(cmd->out) == -1) return -1;
+                        // If the file does not exist, it is created with all privileges
+                        fd_out = open(cmd->out, O_WRONLY | O_CREAT, S_IRWXU);
+                        if (fd_out == -1) {
+                            return -1;
+                        }
+                        dup2(fd_out, 1);
+                        if (close(fd_out)) return -1;
+                    }
+
+                    for(j = 0; j < nb_pipe; j++) {
+                        if (close(fd[j][0])) return -1;
+                        if (close(fd[j][1])) return -1;
+                    }
                 }
                 // Si on est au premier.
                 else if (i == 0) {
                     dup2(fd[0][1], 1);
-                    if (close(fd[0][1])) return -1;
+
+                    // S'il y a un fichier en entrée.
+                    if (cmd->in != NULL) {
+                        // Descripteur pour le fichier eventuel en entrée
+                        int fd_in;
+                        fd_in = open(cmd->in, O_RDONLY);
+                        if (fd_in == -1) {
+                            return -1;
+                        }
+                        dup2(fd_in, 0);
+                        if (close(fd_in)) return -1;
+                    }
+
+                    for(j = 0; j < nb_pipe; j++) {
+                        if (close(fd[j][0])) return -1;
+                        if (close(fd[j][1])) return -1;
+                    }
                 }
                 // Pour tous les autres.
                 else {
                     // On écrit dans le pipe précedent (à droite)
                     // et on le ferme.
+                    // A droite du processus i : pipe i.
+                    // A gauche du processus i : pipe i-1.
                     dup2(fd[i][1], 1);
-                    if (close(fd[i][1])) return -1;
-
                     dup2(fd[i-1][0], 0);
-                    if (close(fd[i-1][0])) return -1;
-                    //if (close(fd[i-1][1])) return -1;
+                    for(j = 0; j < nb_pipe; j++) {
+                        if (close(fd[j][0])) return -1;
+                        if (close(fd[j][1])) return -1;
+                    }
                 }
 
                 // Et on exec la partie droite du pipe
@@ -332,14 +369,26 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
                 }
                 break;
             default:
-                // On passe à la descendance le pipe en écriture.
-                if (i != 0) {
-                    //if (close(fd[i-1][0])) return -1;
-                }
+                // On passe à la descendance tous les pipes !
+                // On ne les fermera tous dans le père principal qu'à la fin.
                 break;
         }
     } 
-    waitpid(pid[nb_seq - 1], &status[nb_seq - 1], 0);
+    // On ferme tous les pipes du père.
+    for(j = 0; j < nb_pipe; j++) {
+        if (close(fd[j][0])) return -1;
+        if (close(fd[j][1])) return -1;
+    }
+    // On attend tous les processus en commençant par le premier
+    // qui écrit.
+    if (cmd->bg) {
+        for(j = 0; j < nb_seq; j++) add_jobs(pid[j], cpyLine);
+    }
+    else {
+        for(j = 0; j < nb_seq; j++) {
+            waitpid(pid[j], status + j, 0);
+        }
+    }
 
     free(pid);
     free(status);
@@ -484,7 +533,6 @@ int executer(char *line)
     } 
     // Cas avec pipe
     else {
-        //free(cpyLine);
         return exec_multi_pipe(cmd, cpyLine);
     }
 }
