@@ -9,8 +9,6 @@ struct JOBS
     pid_t *pid_number;
     // Date de début d'execution de la commande.
     struct timeval* begin;
-    // Booléen indiquant si la séquence est terminée ou non.
-    int end;
     // Nombre de séquences dans la commande.
     int nb;
     struct JOBS * next;
