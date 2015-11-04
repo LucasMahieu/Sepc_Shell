@@ -86,7 +86,7 @@ void print_jobs()
             printf("%d, ", (tmp->pid_number)[i]);
         }
         printf("%d. -- ", (tmp->pid_number)[tmp->nb - 1]);
-        printf("CMD : %s \n", tmp->jseq);
+        printf("CMD : `%s` \n", tmp->jseq);
     }
 }
 
@@ -314,6 +314,9 @@ void  print_cmd(struct cmdline * cmd)
 // Traitant d'interruption quand un processus fils se termine.
 void print_time(int signal) 
 {   
+    // Si la jlist est vide, pas la peine de faire le reste.
+    if (jlist == NULL) return;
+
     int i = 0;
     // Uptime du processus : sec + usec
     long sec = 0;
@@ -341,7 +344,6 @@ void print_time(int signal)
      *  Recherche du jobs qui a fini, et suppresion de la jlist  *
      *-----------------------------------------------------------*/
 
-    if (jlist == NULL) return;
     for (p = jlist; p != NULL; p = p->next) {
         status = (int *) calloc(p->nb, sizeof(*status));
 
@@ -353,12 +355,14 @@ void print_time(int signal)
         // son terminés.
         for(i = 0; i < p->nb; i++) {
             waitpid((p->pid_number)[i],status + i,WNOHANG);
+            //if (!status[i]) 
+            //printf("\nseq[%d], status = %d\n", i, status[i]);
         }
 
         // S'il est terminé :
         //  - on affiche son temps d'execution en informant l'utilisateur ;
         //  - on l'enlève de la jlist.
-        if(!status[p->nb-1]) {
+        if(WIFEXITED(status[p->nb-1])) {
 
             /*------------------------------*
              *  Calcul du temps d'execution *
@@ -370,7 +374,7 @@ void print_time(int signal)
             diff_t = (long) (now_t - begin_t);
             sec = (long) (diff_t / 1000000);
             usec = (long) (diff_t % 1000000);
-            printf("\nCMD:'%s' with PID(s)=", p->jseq);
+            printf("\nCMD:`%s` with PID(s)=", p->jseq);
             for( i = 0; i < p->nb - 1; i++) {
                 printf(" %d,", (p->pid_number)[i]);
             }
