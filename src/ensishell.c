@@ -336,7 +336,6 @@ void print_time(int signal)
     jobs *p = jlist;
     jobs *p_prev = p;
     int *status = NULL;
-    int status_global = 0;
 
     /*-----------------------------------------------------------*
      *  Recherche du jobs qui a fini, et suppresion de la jlist  *
@@ -351,17 +350,11 @@ void print_time(int signal)
         for(i = 0; i < p->nb; i++) {
             waitpid((p->pid_number)[i],status + i,WNOHANG);
         }
-        for(i = 0; i < p->nb; i++) {
-            if (status[i]) {
-                status_global = 1;
-                break;
-            }
-        }
 
         // S'il est terminé :
         //  - on affiche son temps d'execution en informant l'utilisateur ;
         //  - on l'enlève de la jlist.
-        if(!status_global) {
+        if(!status[p->nb-1]) {
 
             /*------------------------------*
              *  Calcul du temps d'execution *
