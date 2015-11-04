@@ -343,7 +343,11 @@ void print_time(int signal)
 
     if (jlist == NULL) return;
     for (p = jlist; p != NULL; p = p->next) {
-        status = (int *) malloc(p->nb * sizeof(*status));
+        status = (int *) calloc(p->nb, sizeof(*status));
+
+        for(i = 0; i < p->nb; i++) {
+            status[i] = 1;
+        }
 
         // On regarde si tous les processus de la commande
         // son terminés.
