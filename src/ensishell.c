@@ -359,7 +359,7 @@ void print_time(int signal)
             //printf("\nseq[%d], status = %d\n", i, status[i]);
         }
 
-        // S'il est terminé :
+        // S'il est terminé normalement (WIFEXITED)
         //  - on affiche son temps d'execution en informant l'utilisateur ;
         //  - on l'enlève de la jlist.
         if(WIFEXITED(status[p->nb-1])) {
