@@ -176,6 +176,10 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
     int *status = NULL;
     if ((status = (int*) malloc(nb_seq * sizeof(*status))) == NULL) return -1;
 
+    for(i = 0; i < nb_seq; i++) {
+        status[i] = 1;
+    }
+
     // Tableau des pipes à deux dimensions alloué dynamiquement :
     // fd[i][j] où 0 < i < nb_pipe - 1
     //             0 < j < 2
@@ -314,9 +318,6 @@ void  print_cmd(struct cmdline * cmd)
 // Traitant d'interruption quand un processus fils se termine.
 void print_time(int signal) 
 {   
-    // Si la jlist est vide, pas la peine de faire le reste.
-    if (jlist == NULL) return;
-
     int i = 0;
     // Uptime du processus : sec + usec
     long sec = 0;
@@ -355,8 +356,6 @@ void print_time(int signal)
         // son terminés.
         for(i = 0; i < p->nb; i++) {
             waitpid((p->pid_number)[i],status + i,WNOHANG);
-            //if (!status[i]) 
-            //printf("\nseq[%d], status = %d\n", i, status[i]);
         }
 
         // S'il est terminé normalement (WIFEXITED)
