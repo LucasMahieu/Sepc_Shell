@@ -158,7 +158,7 @@ int get_nb_seq( struct cmdline* cmd )
     return i;
 }
 
-// Cas d'execution dans le cas de plusieures pipes.
+// Cas d'exécution dans le cas de plusieurs pipes.
 int exec_multi_pipe(struct cmdline *cmd, char *cpyLine) 
 {
     // Nombre de séquences.
@@ -177,7 +177,7 @@ int exec_multi_pipe(struct cmdline *cmd, char *cpyLine)
     if ((status = (int*) malloc(nb_seq * sizeof(*status))) == NULL) return -1;
 
     for(i = 0; i < nb_seq; i++) {
-        status[i] = 1;
+        status[i] = 0;
     }
 
     // Tableau des pipes à deux dimensions alloué dynamiquement :
@@ -348,13 +348,10 @@ void print_time(int signal)
     for (p = jlist; p != NULL; p = p->next) {
         status = (int *) calloc(p->nb, sizeof(*status));
 
-        for(i = 0; i < p->nb; i++) {
-            status[i] = 1;
-        }
-
         // On regarde si tous les processus de la commande
         // son terminés.
         for(i = 0; i < p->nb; i++) {
+            status[i] = 1;
             waitpid((p->pid_number)[i],status + i,WNOHANG);
         }
 
